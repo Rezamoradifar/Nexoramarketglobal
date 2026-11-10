@@ -1,0 +1,26 @@
+name: BNB testnet contracts
+on:
+  push:
+    branches:
+      - feature/bnb-testnet-vault-20261110
+  pull_request:
+    paths:
+      - "contracts/**"
+      - ".github/workflows/bnb-testnet-contracts.yml"
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install and resolve OpenZeppelin dependencies
+        run: npm install --no-audit --no-fund
+      - name: Compile Solidity
+        run: npm run compile
+      - name: Run vault tests
+        run: npm test

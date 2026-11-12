@@ -125,8 +125,36 @@ ln -sfn "$DOMAIN_AVAILABLE" "$DOMAIN_ENABLED"
 
 nginx -t
 systemctl reload nginx
-curl --fail --silent --show-error --max-time 10 http://127.0.0.1:3080/ | grep -q 'id="root"'
-curl --fail --silent --show-error --max-time 10 -H 'Host: nexoramarketglobal.live' http://127.0.0.1/ | grep -q 'id="root"'
+
+# Nginx reload is asynchronous; retry while new workers pick up the config.
+# Read into a file: curl | grep -q under pipefail can fail with SIGPIPE even on HTTP 200.
+check_http() {
+  local label="$1" url="$2" host="${3:-}"
+  local out="$BACKUP/health-${label}.html"
+  local code="000" attempt
+  local -a curl_args=(--silent --show-error --max-time 8 --output "$out" --write-out '%{http_code}')
+  [[ -z "$host" ]] || curl_args+=(-H "Host: $host")
+  for attempt in {1..12}; do
+    code="$(curl "${curl_args[@]}" "$url")" || code="CURL_ERROR"
+    if [[ "$code" == "200" ]] && grep -Fq 'id="root"' "$out"; then
+      echo "NEXORA_HTTP_CHECK_OK ${label}: 200 / React root found (attempt ${attempt})"
+      return 0
+    fi
+    echo "NEXORA_HTTP_CHECK_RETRY ${label}: HTTP ${code} (attempt ${attempt}/12)"
+    sleep 1
+  done
+  echo "NEXORA_HTTP_CHECK_FAILED ${label}: ${url} HTTP ${code}" >&2
+  if [[ -f "$out" ]]; then
+    echo "NEXORA_HTTP_RESPONSE_SAMPLE (${out}):" >&2
+    head -c 400 "$out" >&2 || true
+    printf '\\n' >&2
+  fi
+  echo "NEXORA_NGINX_ERRORS:" >&2
+  tail -n 12 /var/log/nginx/error.log >&2 || true
+  return 1
+}
+check_http preview 'http://127.0.0.1:3080/'
+check_http domain 'http://127.0.0.1/' 'nexoramarketglobal.live'
 trap - ERR
 
 printf '\nNEXORA_HTTP_READY\n'

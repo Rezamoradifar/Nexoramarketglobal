@@ -103,7 +103,8 @@ contract NexoraProfitVaultTest {
         vm.warp(block.timestamp + 90 days);
         for (uint256 i; i < 4; ++i) {
             vm.prank(CAROL);
-            vault.withdrawPrincipal(250 * U);
+            // Stay strictly below the daily 20% cap while reducing branch volume.
+            vault.withdrawPrincipal(200 * U);
             vm.warp(block.timestamp + 1 days);
         }
         _assertEq(vault.tierBps(ALICE), 100);

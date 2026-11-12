@@ -56,11 +56,12 @@ contract NexoraProfitVaultTest {
         _assertEq(vault.unallocatedRewards(), 0);
 
         vault.pause();
+        vm.warp(block.timestamp + 90 days);
         uint256 beforeBalance = token.balanceOf(ALICE);
         vm.prank(ALICE);
-        vault.withdrawPrincipal(40 * U);
-        _assertEq(token.balanceOf(ALICE), beforeBalance + 40 * U);
-        _assertEq(vault.totalPrincipal(), 60 * U);
+        vault.withdrawPrincipal(20 * U);
+        _assertEq(token.balanceOf(ALICE), beforeBalance + 20 * U);
+        _assertEq(vault.totalPrincipal(), 80 * U);
         require(vault.isSolvent(), "Vault must remain solvent");
         vm.prank(ALICE);
         _expectFailure(abi.encodeCall(NexoraProfitVault.deposit, (10 * U, address(0))));
@@ -154,6 +155,7 @@ contract NexoraProfitVaultTest {
         _assertEq(vault.unallocatedRewards(), 75 * U / 100);
         _assertEq(vault.totalClaimableRewards(), 125 * U / 100);
 
+        vm.warp(block.timestamp + 90 days);
         uint256 beforeBalance = token.balanceOf(DAVE);
         vm.prank(DAVE);
         vault.claimRewards();
@@ -194,8 +196,17 @@ contract NexoraProfitVaultTest {
         _assertEq(vault.totalPrincipal(), amount);
         _assertEq(vault.unallocatedRewards(), 0);
         uint256 original = token.balanceOf(ALICE);
-        vm.prank(ALICE);
-        vault.withdrawPrincipal(amount);
+        vm.warp(block.timestamp + 90 days);
+        uint256 cap = amount / 5;
+        uint256 stillOwed = amount;
+        for (uint256 i; i < 6 && stillOwed != 0; ++i) {
+            uint256 part = stillOwed < cap ? stillOwed : cap;
+            vm.prank(ALICE);
+            vault.withdrawPrincipal(part);
+            stillOwed -= part;
+            vm.warp(block.timestamp + 1 days);
+        }
+        _assertEq(stillOwed, 0);
         _assertEq(token.balanceOf(ALICE), original + amount);
         _assertEq(vault.totalPrincipal(), 0);
         require(vault.isSolvent(), "Vault must remain solvent after full exit");
@@ -214,5 +225,103 @@ contract NexoraProfitVaultTest {
         _assertEq(vault.unallocatedRewards(), 1);
         _assertEq(vault.getAccount(ALICE).baseRewards, cap);
         require(vault.isSolvent(), "Funded rewards and principal remain backed");
+    }
+
+    function testNoWithdrawalsBeforeNinetyDaysOrWithoutDailyCapacity() public {
+        _deposit(ALICE, 1_000 * U, address(0));
+        vm.prank(ALICE);
+        _expectFailure(abi.encodeCall(NexoraProfitVault.withdrawPrincipal, (1 * U)));
+        vm.warp(block.timestamp + 90 days - 1);
+        vm.prank(ALICE);
+        _expectFailure(abi.encodeCall(NexoraProfitVault.withdrawPrincipal, (1 * U)));
+        vm.warp(block.timestamp + 1);
+        vm.prank(ALICE);
+        vault.withdrawPrincipal(120 * U);
+        _assertEq(vault.remainingWithdrawalCap(ALICE), 80 * U);
+        vm.prank(ALICE);
+        vault.withdrawPrincipal(80 * U);
+        _assertEq(vault.remainingWithdrawalCap(ALICE), 0);
+        vm.prank(ALICE);
+        _expectFailure(abi.encodeCall(NexoraProfitVault.withdrawPrincipal, (1 * U)));
+        vm.warp(block.timestamp + 1 days);
+        _assertEq(vault.remainingWithdrawalCap(ALICE), 200 * U);
+        vm.prank(ALICE);
+        vault.withdrawPrincipal(200 * U);
+        _assertEq(vault.totalPrincipal(), 600 * U);
+        require(vault.isSolvent(), "Principal and reserve still solvent");
+    }
+
+    function testSharedTwentyPercentCapWithRewardClaimAndZeroFee() public {
+        _deposit(ALICE, 1_000 * U, address(0));
+        vm.warp(block.timestamp + 1 days);
+        vault.fundRewards(100 * U);
+        vault.allocateReward(ALICE, 10 * U, bytes32(uint256(5)));
+        vm.prank(ALICE);
+        _expectFailure(abi.encodeCall(NexoraProfitVault.claimRewards, ()));
+        vm.warp(block.timestamp + 90 days);
+        vm.prank(ALICE);
+        vault.withdrawPrincipal(190 * U);
+        _assertEq(vault.remainingWithdrawalCap(ALICE), 10 * U);
+        uint256 before = token.balanceOf(ALICE);
+        vm.prank(ALICE);
+        vault.claimRewards();
+        _assertEq(token.balanceOf(ALICE), before + 10 * U);
+        _assertEq(vault.WITHDRAWAL_FEE_BPS(), 0);
+        _assertEq(vault.remainingWithdrawalCap(ALICE), 0);
+        require(vault.isSolvent(), "No unbacked balances");
+    }
+
+    function testReinvestFundedRewardsIntoNewNinetyDayTranche() public {
+        _deposit(ALICE, 1_000 * U, address(0));
+        vm.warp(block.timestamp + 1 days);
+        vault.fundRewards(100 * U);
+        vault.allocateReward(ALICE, 10 * U, bytes32(uint256(6)));
+        uint256 beforeBalance = token.balanceOf(address(vault));
+        uint256 beforeBasis = vault.externalDepositBasis(ALICE);
+        uint256 beforeLiabilities = vault.totalPrincipal() + vault.unallocatedRewards()
+            + vault.totalClaimableRewards();
+        vm.prank(ALICE);
+        vault.reinvestRewards(10 * U);
+        _assertEq(vault.totalPrincipal(), 1_010 * U);
+        _assertEq(vault.totalClaimableRewards(), 0);
+        _assertEq(vault.externalDepositBasis(ALICE), beforeBasis);
+        _assertEq(token.balanceOf(address(vault)), beforeBalance);
+        _assertEq(
+            vault.totalPrincipal() + vault.unallocatedRewards() + vault.totalClaimableRewards(),
+            beforeLiabilities
+        );
+        _assertEq(vault.principalTrancheCount(ALICE), 2);
+        vm.warp(block.timestamp + 90 days);
+        vm.prank(ALICE);
+        vault.withdrawPrincipal(200 * U);
+        _assertEq(vault.remainingWithdrawalCap(ALICE), 0);
+        require(vault.isSolvent(), "Reinvest did not manufacture income");
+    }
+
+    function testDepositTopUpDoesNotRelockOldTranche() public {
+        _deposit(ALICE, 1_000 * U, address(0));
+        vm.warp(block.timestamp + 80 days);
+        _deposit(ALICE, 100 * U, address(0));
+        vm.warp(block.timestamp + 10 days);
+        vm.prank(ALICE);
+        vault.withdrawPrincipal(200 * U);
+        _assertEq(vault.totalPrincipal(), 900 * U);
+        _assertEq(vault.remainingWithdrawalCap(ALICE), 20 * U);
+        vm.prank(ALICE);
+        _expectFailure(abi.encodeCall(NexoraProfitVault.withdrawPrincipal, (201 * U)));
+        require(vault.isSolvent(), "Top-up maturity independent");
+    }
+
+    function testNoFeeAndNoOwnerWithdrawalOfUserPrincipal() public {
+        _deposit(ALICE, 100 * U, address(0));
+        vm.prank(BOB);
+        _expectFailure(abi.encodeCall(NexoraProfitVault.withdrawPrincipal, (1 * U)));
+        vm.warp(block.timestamp + 90 days);
+        uint256 before = token.balanceOf(ALICE);
+        vm.prank(ALICE);
+        vault.withdrawPrincipal(20 * U);
+        _assertEq(token.balanceOf(ALICE), before + 20 * U);
+        _assertEq(vault.WITHDRAWAL_FEE_BPS(), 0);
+        require(vault.isSolvent(), "Fully backed");
     }
 }

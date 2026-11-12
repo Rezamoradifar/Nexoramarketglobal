@@ -7,11 +7,12 @@ pragma solidity ^0.8.24;
  * @dev Accepts only separately funded ERC20 distributions, NEVER user principal.
  *
  * Payout percentages are FIXED BY CODE (only addresses are constructor inputs):
- * - payoutWallets[0] gets 50% of this splitter's 20% revenue pool
+ * - payoutWallets[0] gets 50/120 of the splitter's 24% pool
  *   = 10% of gross routed revenue.
- * - payoutWallets[1..10] each gets 5% of the 20% pool
- *   = 1% of gross routed revenue each.
- * - Together these recipients receive only the router's 20% pool.
+ * - payoutWallets[1..10] each gets 7/120 of the 24% pool
+ *   = 1.4% of gross routed revenue each.
+ * - The ten other wallets are COMPANY wallets, not personal user wallets.
+ * - Together these recipients receive only the router's 24% pool.
  *
  * This contract cannot verify that deposited distribution tokens represent
  * realized *net profit*. Real business accounting/audit is off-chain.
@@ -28,16 +29,16 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant RECIPIENT_COUNT = 11;
-    uint256 public constant BPS = 10_000;
-    uint16 public constant OWNER_POOL_BPS = 5_000;
-    uint16 public constant PARTNER_POOL_BPS = 500;
+    uint256 public constant POOL_WEIGHT_DENOMINATOR = 120;
+    uint16 public constant OWNER_POOL_WEIGHT = 50;
+    uint16 public constant COMPANY_POOL_WEIGHT = 7;
     bytes32 public constant FUNDER_ROLE = keccak256("FUNDER_ROLE");
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
 
     IERC20 public immutable asset;
 
     address[11] public payoutWallets;
-    uint16[11] public sharesBps;
+    uint16[11] public shareWeights;
 
     mapping(address => uint256) public claimable;
     mapping(bytes32 => bool) public usedEvidenceIds;
@@ -55,7 +56,7 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
         address indexed recipient,
         uint8 indexed index,
         uint256 amount,
-        uint16 shareBps
+        uint16 shareWeight
     );
     event ShareClaimed(address indexed recipient, uint256 amount);
 
@@ -86,7 +87,7 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
                 if (wallets_[i] == wallets_[j]) revert DuplicateWallet();
             }
             payoutWallets[i] = wallets_[i];
-            sharesBps[i] = i == 0 ? OWNER_POOL_BPS : PARTNER_POOL_BPS;
+            shareWeights[i] = i == 0 ? OWNER_POOL_WEIGHT : COMPANY_POOL_WEIGHT;
         }
 
         asset = IERC20(token_);
@@ -125,14 +126,16 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
         // Give rounding remainder to owner index 0; no rounding dust trapped.
         uint256 othersTotal;
         for (uint8 i = 1; i < RECIPIENT_COUNT; ++i) {
-            uint256 share = amount * sharesBps[i] / BPS;
+            // Exact rational allocation: 7 / 120 of the 24% pool = 1.4% gross.
+            uint256 share = amount / POOL_WEIGHT_DENOMINATOR * COMPANY_POOL_WEIGHT
+                + (amount % POOL_WEIGHT_DENOMINATOR) * COMPANY_POOL_WEIGHT / POOL_WEIGHT_DENOMINATOR;
             claimable[payoutWallets[i]] += share;
             othersTotal += share;
-            emit ShareAllocated(payoutWallets[i], i, share, sharesBps[i]);
+            emit ShareAllocated(payoutWallets[i], i, share, shareWeights[i]);
         }
         uint256 ownerShare = amount - othersTotal;
         claimable[payoutWallets[0]] += ownerShare;
-        emit ShareAllocated(payoutWallets[0], 0, ownerShare, sharesBps[0]);
+        emit ShareAllocated(payoutWallets[0], 0, ownerShare, shareWeights[0]);
         emit RevenueDistributionFunded(msg.sender, evidenceId, amount);
     }
 
@@ -152,9 +155,9 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
 
     function getConfiguration()
         external view
-        returns (address[11] memory wallets, uint16[11] memory bps)
+        returns (address[11] memory wallets, uint16[11] memory weights)
     {
-        return (payoutWallets, sharesBps);
+        return (payoutWallets, shareWeights);
     }
 
     function isSolvent() external view returns (bool) {

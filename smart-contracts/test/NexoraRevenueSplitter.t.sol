@@ -111,7 +111,7 @@ contract NexoraRevenueSplitterTest {
         _assertEq(token.balanceOf(wallets[1]), 5 * U);
     }
 
-    function testDistributionPercentagesAreFixedAndNotCallerControlled() public {
+    function testDistributionPercentagesAreFixedAndNotCallerControlled() public view {
         _assertEq(splitter.OWNER_POOL_BPS(), 5_000);
         _assertEq(splitter.PARTNER_POOL_BPS(), 500);
         _assertEq(splitter.sharesBps(0), 5_000);

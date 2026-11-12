@@ -1,4 +1,4 @@
-# Nexora Profit Vault (v0.1 — TESTNET PROTOTYPE)
+# Nexora Profit Vault (v0.2 — TESTNET PROTOTYPE)
 
 **NOT audited, NOT deployed, and NOT ready for investor funds.** It is deliberately separate from the live website and the legacy Polygon contract.
 
@@ -74,35 +74,19 @@ Only the **admin** has `DEFAULT_ADMIN_ROLE` (and can grant/revoke roles). The ad
 
 No investment contract has been deployed or enabled by committing this code.
 
-## Fixed 80/10/10 allocation: user-reward vault, owner, and ten partners
+## Final requested accounting: 100% gross user principal + independently sponsored company payouts
 
-The **NexoraRevenueRouter.sol** transfers **80% of separately funded revenue** into the vault's independent reward reserve and **20%** into **NexoraRevenueSplitter.sol**. The splitter has exactly 11 recipients: owner wallet index 0 receives **50% of that 20% pool (= 10% of total funded revenue)**; 10 partners at indices 1–10 each receive **5% of the 20% pool (= 1% of total funded revenue each)**.
+**See [Full gross-principal and company sponsor funding policy](./GROSS-PRINCIPAL-SPONSORED-COMPANY-PAYOUTS.md).**
 
-- Eleven public wallet addresses are constructor inputs. Every wallet must be unique and nonzero. Percentages are **fixed in the code**, not provided by the deployer: owner 5,000 BPS of splitter pool, each partner 500 BPS. The 11 weights sum to 10,000 BPS.
-- **Approved distribution:** 80% of separately funded revenue remains as rewards in the smart-contract vault; 10% of total revenue goes to the owner, and each of ten partners receives 1% of total revenue. All tests enforce this allocation.
-- The 100% splitter distribution means **100% of its own 20% sub-pool**, not user deposits, investor-reward credits, or necessarily all gross business revenue.
-- No wallet receives any funds until an authorized funder transfers tokens into this contract for a specific, unique accounting evidence ID. The evidence ID is not proof of realized profit.
-- Once funded, the contract records fully backed claimable balances. Each recipient claims its own share; even the admin cannot claim someone else's balance.
-- Addresses are **immutable** after deployment and percentages are fixed in source code. Changes require revised code/new deployment and settlement of existing pending claims.
-- Administrators can pause new funding, but beneficiaries can still claim existing shares. There is no sweep or arbitrary recipient-payout function.
-- The splitter does **not** handle user deposits. Only an explicitly authorized router sends separately funded revenue (80% to the reward vault, 20% to this splitter). Neither contract proves trading profit or executes a strategy.
+- Depositing **1,000 USDT credits and retains all 1,000 USDT** as protected user principal and sets the reward tier's calculation basis to 1,000 USDT (subject to actual ongoing balance and eligibility).
+- The owner requests **6% of the deposit reference amount** and ten corporate wallets **1.4% each**, when a deposit or fully funded reward reinvest occurs.
+- These 20% company bonuses **cannot come out of depositor principal** if the system promises that the full gross user balance is protected. For a 1,000 USDT deposit, an **additional 200 USDT of independent company money** must fund 60 USDT owner and 14 USDT to each of ten companies.
+- For 100 USDT of already funded rewards reinvested, all 100 USDT becomes new user principal. Any bonuses of 6 USDT for the owner and 1.4 USDT for each company require **another 20 USDT independently funded by the company**. No reward funds backing the user can be diverted.
+- The **existing** `NexoraRevenueRouter.sol` has a fixed **80% independent revenue reserve / 20% recipient pool**; `NexoraRevenueSplitter.sol` splits that recipient pool **30% owner / 7% each of ten corporate wallets**, equivalent to 6% and 1.4% *of independently funded routed revenue*. **These are not automatically triggered by deposits or Reinvest.** That dedicated, verified, independently funded per-deposit subsidy linkage **has not yet been implemented**.
+- The vault has **0% withdrawal fees**, a separate 90-day lock for principal tranches and a cumulative 20% per anchored 24-hour window withdrawal cap based on externally deposited amounts. The full principal is visible but it is not all immediately withdrawable.
+- Daily tier rates 1–2.5% are **conditional maximums, never promised profits**. Credits require an authorized allocator and fully funded independent reward reserve; payouts can be zero.
 
-### Constructor parameters
-
-```solidity
-NexoraRevenueSplitter(
-    address token,           // 18-decimal verified BEP-20 token
-    address adminMultisig,   // governance and emergency pausing
-    address fundingWallet,   // sole account permitted to fund distributions
-    address[11] wallets      // index 0 = owner, indices 1..10 = partners
-)
-```
-
-User wallets do not need private keys shared in chat. Only their public wallet addresses should be provided for the deployment parameters. An independent audit, published funding-account policy and legal review are mandatory before any real-money launch.
-
-### Economics still to decide
-
-The percentages are fixed: **80% vault / 10% owner / 1% for each of ten partners**. Before deploying, establish (a) the externally verified net distributable business revenue definition, (b) all 11 public payout addresses, (c) trustworthy multisig roles, and (d) any reserve retained **before** revenue enters this router. Never assume token funding proves realized profits.
+There are 11 company/owner payout wallets, all unique and publicly verifiable. User principal is not under their control; no wallet can withdraw another member's principal. Administrative role governance remains a separate risk requiring multisig verification and independent audit.
 
 ## Mainnet preparation package (NOT a release)
 

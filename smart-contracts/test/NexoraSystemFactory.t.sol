@@ -11,6 +11,7 @@ interface VmMainnet {
     function chainId(uint256 newChainId) external;
     function prank(address sender) external;
     function warp(uint256 newTimestamp) external;
+    function etch(address target, bytes calldata code) external;
 }
 
 contract NexoraSystemFactoryTest {
@@ -126,6 +127,39 @@ contract NexoraSystemFactoryTest {
         require(rejected, "Wrong mainnet token was accepted");
     }
 
+    function testMainnetRequiresDeployedContractForGovernance() public {
+        vm.chainId(56);
+        // Only simulate the official address on local EVM; NEVER deploy this mock.
+        address pinned = factory.MAINNET_BINANCE_PEG_USDT();
+        vm.etch(pinned, address(token).code);
+        bool rejected;
+        try new NexoraSystemFactory(
+            pinned, ADMIN, address(this), ALLOCATOR, recipients
+        ) returns (NexoraSystemFactory) {} catch { rejected = true; }
+        require(rejected, "An EOA was accepted as BSC mainnet governance");
+    }
+
+    function testMainnetContractGovernanceBootstrapsWithoutDeployerAdmin() public {
+        vm.chainId(56);
+        address pinned = factory.MAINNET_BINANCE_PEG_USDT();
+        // Test-only bytecode at the pinned address, not a real mainnet fork.
+        vm.etch(pinned, address(token).code);
+        DummyAdmin gov = new DummyAdmin();
+        NexoraSystemFactory f = new NexoraSystemFactory(
+            pinned, address(gov), address(this), ALLOCATOR, recipients
+        );
+        require(f.vault().hasRole(f.vault().DEFAULT_ADMIN_ROLE(), address(gov)),
+            "Vault governance was not transferred");
+        require(f.splitter().hasRole(f.splitter().DEFAULT_ADMIN_ROLE(), address(gov)),
+            "Splitter governance was not transferred");
+        require(f.router().hasRole(f.router().DEFAULT_ADMIN_ROLE(), address(gov)),
+            "Router governance was not transferred");
+        require(!f.vault().hasRole(f.vault().DEFAULT_ADMIN_ROLE(), address(f)),
+            "Factory retains vault admin");
+        require(!f.splitter().hasRole(f.splitter().DEFAULT_ADMIN_ROLE(), address(f)),
+            "Factory retains splitter admin");
+    }
+
     function testRoleSeparationIsMandatory() public {
         bool rejected;
         try new NexoraSystemFactory(
@@ -152,3 +186,5 @@ contract NexoraSystemFactoryTest {
         require(rejected, "Zero beneficiary accepted");
     }
 }
+
+contract DummyAdmin { }

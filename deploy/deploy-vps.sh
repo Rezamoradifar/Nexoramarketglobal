@@ -40,6 +40,13 @@ if [[ -f "$NGINX_CONF" ]] && ! grep -q 'Managed by Nexora Markets VPS deployment
   exit 1
 fi
 if [[ ! -e "$NGINX_CONF" ]]; then
+  domain_conflict="$(grep -RlE 'server_name[^;]*nexoramarketglobal[.]live' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true)"
+  if [[ -n "$domain_conflict" ]]; then
+    echo "ERROR: domain already configured in: $domain_conflict" >&2
+    exit 1
+  fi
+fi
+if [[ ! -e "$NGINX_CONF" ]]; then
   conflicting="$(grep -RlE 'listen[[:space:]]+([^;]*:)?3080([[:space:];]|$)' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true)"
   if [[ -n "$conflicting" ]]; then
     echo "ERROR: port $PORT is already configured by: $conflicting" >&2
@@ -84,6 +91,18 @@ server {
     server_tokens off;
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
+    location / { try_files $uri $uri/ /index.html; }
+    location ~ /\. { deny all; }
+    location ~* \.(env|log|sql|bak|ini|conf)$ { deny all; }
+}
+server {
+    listen 80;
+    server_name nexoramarketglobal.live www.nexoramarketglobal.live;
+    root /opt/nexora-markets/current/dist;
+    index index.html;
+    autoindex off;
+    server_tokens off;
+    add_header X-Content-Type-Options nosniff always;
     location / { try_files $uri $uri/ /index.html; }
     location ~ /\. { deny all; }
     location ~* \.(env|log|sql|bak|ini|conf)$ { deny all; }

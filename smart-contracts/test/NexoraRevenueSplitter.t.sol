@@ -20,10 +20,10 @@ contract NexoraRevenueSplitterTest {
 
     function setUp() public {
         token = new MockUSDT();
-        // Owner gets 50/120, each of ten COMPANY wallets 7/120 of the 24% pool.
-        // Gross revenue: 10% owner, 1.4% each company, 76% reserved in vault.
+        // Splitter pool is 20% of amount, split 30% owner and 7% per company.
+        // Gross revenue: 6% owner, 1.4% each company, 80% reserved in vault.
         wallets[0] = address(0x100);
-        weights[0] = 50;
+        weights[0] = 30;
         for (uint256 i = 1; i < 11; ++i) {
             wallets[i] = address(uint160(0x100 + i));
             weights[i] = 7;
@@ -45,20 +45,20 @@ contract NexoraRevenueSplitterTest {
     }
 
     function testOwnerAndTenWalletsArePaidInExactRatios() public {
-        splitter.fundDistribution(120 * U, bytes32(uint256(1)));
-        _assertEq(splitter.claimable(wallets[0]), 50 * U);
+        splitter.fundDistribution(100 * U, bytes32(uint256(1)));
+        _assertEq(splitter.claimable(wallets[0]), 30 * U);
         for (uint256 i = 1; i < 11; ++i) {
             _assertEq(splitter.claimable(wallets[i]), 7 * U);
         }
-        _assertEq(splitter.totalFunded(), 120 * U);
-        _assertEq(splitter.totalClaimable(), 120 * U);
+        _assertEq(splitter.totalFunded(), 100 * U);
+        _assertEq(splitter.totalClaimable(), 100 * U);
         require(splitter.isSolvent(), "Should be solvent");
 
         uint256 beforeOwnerBalance = token.balanceOf(wallets[0]);
         vm.prank(wallets[0]);
         splitter.claim();
-        _assertEq(token.balanceOf(wallets[0]), beforeOwnerBalance + 50 * U);
-        _assertEq(splitter.totalClaimed(), 50 * U);
+        _assertEq(token.balanceOf(wallets[0]), beforeOwnerBalance + 30 * U);
+        _assertEq(splitter.totalClaimed(), 30 * U);
         _assertEq(splitter.totalClaimable(), 70 * U);
         require(splitter.isSolvent(), "Should remain solvent");
     }
@@ -66,7 +66,7 @@ contract NexoraRevenueSplitterTest {
     function testRoundingDustGoesToOwnerNotToTheOperator() public {
         uint256 amount = 101; // just 101 wei, smallest token units
         splitter.fundDistribution(amount, bytes32(uint256(2)));
-        _assertEq(splitter.claimable(wallets[0]), 51);
+        _assertEq(splitter.claimable(wallets[0]), 31);
         for (uint256 i = 1; i < 11; ++i) {
             _assertEq(splitter.claimable(wallets[i]), 5);
         }
@@ -108,20 +108,20 @@ contract NexoraRevenueSplitterTest {
         );
         vm.prank(wallets[1]);
         splitter.claim();
-        _assertEq(token.balanceOf(wallets[1]), 100 * U * 7 / 120);
+        _assertEq(token.balanceOf(wallets[1]), 7 * U);
     }
 
     function testDistributionPercentagesAreFixedAndNotCallerControlled() public view {
-        _assertEq(splitter.OWNER_POOL_WEIGHT(), 50);
+        _assertEq(splitter.OWNER_POOL_WEIGHT(), 30);
         _assertEq(splitter.COMPANY_POOL_WEIGHT(), 7);
-        _assertEq(splitter.POOL_WEIGHT_DENOMINATOR(), 120);
-        _assertEq(splitter.shareWeights(0), 50);
+        _assertEq(splitter.POOL_WEIGHT_DENOMINATOR(), 100);
+        _assertEq(splitter.shareWeights(0), 30);
         uint256 weightsTotal = splitter.shareWeights(0);
         for (uint256 i = 1; i < 11; ++i) {
             _assertEq(splitter.shareWeights(i), 7);
             weightsTotal += splitter.shareWeights(i);
         }
-        _assertEq(weightsTotal, 120);
+        _assertEq(weightsTotal, 100);
     }
 
     function testDuplicateRecipientsAreRejected() public {

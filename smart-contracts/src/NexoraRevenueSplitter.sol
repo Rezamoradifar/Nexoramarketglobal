@@ -7,9 +7,9 @@ pragma solidity ^0.8.24;
  * @dev Accepts only separately funded ERC20 distributions, NEVER user principal.
  *
  * Payout percentages are FIXED BY CODE (only addresses are constructor inputs):
- * - payoutWallets[0] gets 50/120 of the splitter's 24% pool
- *   = 10% of gross routed revenue.
- * - payoutWallets[1..10] each gets 7/120 of the 24% pool
+ * - payoutWallets[0] gets 30/100 of the splitter's 20% pool
+ *   = 6% of gross routed revenue.
+ * - payoutWallets[1..10] each gets 7/100 of the 20% pool
  *   = 1.4% of gross routed revenue each.
  * - The ten other wallets are COMPANY wallets, not personal user wallets.
  * - Together these recipients receive only the router's 24% pool.
@@ -29,8 +29,8 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant RECIPIENT_COUNT = 11;
-    uint256 public constant POOL_WEIGHT_DENOMINATOR = 120;
-    uint16 public constant OWNER_POOL_WEIGHT = 50;
+    uint256 public constant POOL_WEIGHT_DENOMINATOR = 100;
+    uint16 public constant OWNER_POOL_WEIGHT = 30;
     uint16 public constant COMPANY_POOL_WEIGHT = 7;
     bytes32 public constant FUNDER_ROLE = keccak256("FUNDER_ROLE");
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
@@ -126,7 +126,7 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
         // Give rounding remainder to owner index 0; no rounding dust trapped.
         uint256 othersTotal;
         for (uint8 i = 1; i < RECIPIENT_COUNT; ++i) {
-            // Exact rational allocation: 7 / 120 of the 24% pool = 1.4% gross.
+            // 7% of 20% recipient pool = 1.4% of externally funded amount.
             uint256 share = amount / POOL_WEIGHT_DENOMINATOR * COMPANY_POOL_WEIGHT
                 + (amount % POOL_WEIGHT_DENOMINATOR) * COMPANY_POOL_WEIGHT / POOL_WEIGHT_DENOMINATOR;
             claimable[payoutWallets[i]] += share;

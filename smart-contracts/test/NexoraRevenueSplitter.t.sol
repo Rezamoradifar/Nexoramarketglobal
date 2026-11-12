@@ -16,17 +16,17 @@ contract NexoraRevenueSplitterTest {
     MockUSDT private token;
     NexoraRevenueSplitter private splitter;
     address[11] private wallets;
-    uint16[11] private bps;
+    uint16[11] private weights;
 
     function setUp() public {
         token = new MockUSDT();
-        // Fixed 50% of recipient pool to owner, 5% each to ten partners.
-        // Router provides precisely 20% of gross revenue to this splitter.
+        // Owner gets 50/120, each of ten COMPANY wallets 7/120 of the 24% pool.
+        // Gross revenue: 10% owner, 1.4% each company, 76% reserved in vault.
         wallets[0] = address(0x100);
-        bps[0] = 5_000;
+        weights[0] = 50;
         for (uint256 i = 1; i < 11; ++i) {
             wallets[i] = address(uint160(0x100 + i));
-            bps[i] = 500;
+            weights[i] = 7;
         }
         splitter = new NexoraRevenueSplitter(
             address(token), address(this), address(this), wallets
@@ -45,13 +45,13 @@ contract NexoraRevenueSplitterTest {
     }
 
     function testOwnerAndTenWalletsArePaidInExactRatios() public {
-        splitter.fundDistribution(100 * U, bytes32(uint256(1)));
+        splitter.fundDistribution(120 * U, bytes32(uint256(1)));
         _assertEq(splitter.claimable(wallets[0]), 50 * U);
         for (uint256 i = 1; i < 11; ++i) {
-            _assertEq(splitter.claimable(wallets[i]), 5 * U);
+            _assertEq(splitter.claimable(wallets[i]), 7 * U);
         }
-        _assertEq(splitter.totalFunded(), 100 * U);
-        _assertEq(splitter.totalClaimable(), 100 * U);
+        _assertEq(splitter.totalFunded(), 120 * U);
+        _assertEq(splitter.totalClaimable(), 120 * U);
         require(splitter.isSolvent(), "Should be solvent");
 
         uint256 beforeOwnerBalance = token.balanceOf(wallets[0]);
@@ -59,7 +59,7 @@ contract NexoraRevenueSplitterTest {
         splitter.claim();
         _assertEq(token.balanceOf(wallets[0]), beforeOwnerBalance + 50 * U);
         _assertEq(splitter.totalClaimed(), 50 * U);
-        _assertEq(splitter.totalClaimable(), 50 * U);
+        _assertEq(splitter.totalClaimable(), 70 * U);
         require(splitter.isSolvent(), "Should remain solvent");
     }
 
@@ -108,19 +108,20 @@ contract NexoraRevenueSplitterTest {
         );
         vm.prank(wallets[1]);
         splitter.claim();
-        _assertEq(token.balanceOf(wallets[1]), 5 * U);
+        _assertEq(token.balanceOf(wallets[1]), 100 * U * 7 / 120);
     }
 
     function testDistributionPercentagesAreFixedAndNotCallerControlled() public view {
-        _assertEq(splitter.OWNER_POOL_BPS(), 5_000);
-        _assertEq(splitter.PARTNER_POOL_BPS(), 500);
-        _assertEq(splitter.sharesBps(0), 5_000);
-        uint256 totalBps = splitter.sharesBps(0);
+        _assertEq(splitter.OWNER_POOL_WEIGHT(), 50);
+        _assertEq(splitter.COMPANY_POOL_WEIGHT(), 7);
+        _assertEq(splitter.POOL_WEIGHT_DENOMINATOR(), 120);
+        _assertEq(splitter.shareWeights(0), 50);
+        uint256 weightsTotal = splitter.shareWeights(0);
         for (uint256 i = 1; i < 11; ++i) {
-            _assertEq(splitter.sharesBps(i), 500);
-            totalBps += splitter.sharesBps(i);
+            _assertEq(splitter.shareWeights(i), 7);
+            weightsTotal += splitter.shareWeights(i);
         }
-        _assertEq(totalBps, 10_000);
+        _assertEq(weightsTotal, 120);
     }
 
     function testDuplicateRecipientsAreRejected() public {
@@ -137,11 +138,11 @@ contract NexoraRevenueSplitterTest {
         (address[11] memory w, uint16[11] memory s) = splitter.getConfiguration();
         for (uint256 i; i < 11; ++i) {
             require(w[i] == wallets[i], "Wallet changed");
-            _assertEq(s[i], bps[i]);
+            _assertEq(s[i], weights[i]);
         }
         splitter.fundDistribution(9 * U, bytes32(uint256(23)));
         for (uint256 i; i < 11; ++i) {
-            _assertEq(splitter.sharesBps(i), bps[i]);
+            _assertEq(splitter.shareWeights(i), weights[i]);
             require(splitter.payoutWallets(i) == wallets[i], "Wallet changed after funding");
         }
     }

@@ -100,8 +100,12 @@ contract NexoraProfitVaultTest {
         vault.syncDirect(CAROL);
         _assertEq(vault.teamVolume(ALICE), 2_500 * U);
         _assertEq(vault.tierBps(ALICE), 125);
-        vm.prank(CAROL);
-        vault.withdrawPrincipal(1_000 * U);
+        vm.warp(block.timestamp + 90 days);
+        for (uint256 i; i < 4; ++i) {
+            vm.prank(CAROL);
+            vault.withdrawPrincipal(250 * U);
+            vm.warp(block.timestamp + 1 days);
+        }
         _assertEq(vault.tierBps(ALICE), 100);
     }
 

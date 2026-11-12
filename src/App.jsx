@@ -12,7 +12,7 @@ export const plans = [
 const money = value => Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const navigation = [
   ['Home', '#home'], ['Invest', '#plans'], ['Markets', '#markets'],
-  ['Referrals', '#referrals'], ['Ranks', '#ranks'], ['Docs', '#docs'],
+  ['Referrals', '#referrals'], ['Ranks', '#ranks'], ['Community', '#community'], ['Docs', '#docs'],
 ];
 
 function Icon({ name, size = 22, className = '' }) {
@@ -34,6 +34,10 @@ function Icon({ name, size = 22, className = '' }) {
     info: <><circle cx="12" cy="12" r="10"/><path d="M12 11v6M12 7h.01"/></>,
     arrow: <><path d="M5 12h14m-7-7 7 7-7 7"/></>,
     coins: <><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></>,
+    telegram: <><path d="m22 3-3.8 17.5-6.3-4.5-3.1 3.1.7-5.7L21 4.5 6.8 13l-4.9-1.7L22 3Z"/></>,
+    x: <><path d="m4 3 16 18M20 3 4 21"/><path d="M4 3h4l12 18h-4M20 3h-4L4 21h4"/></>,
+    instagram: <><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.6" r="1" fill="currentColor" stroke="none"/></>,
+    youtube: <><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3V9Z"/></>,
   };
   return <svg {...common}>{icons[name] || icons.info}</svg>;
 }
@@ -181,6 +185,51 @@ function ExtraSections() {
   </div>;
 }
 
+
+const socialChannels = [
+  { name: 'Telegram', purpose: 'Community news and launch updates', icon: 'telegram' },
+  { name: 'X / Twitter', purpose: 'Official notices and development milestones', icon: 'x' },
+  { name: 'Instagram', purpose: 'Visual stories and announcements', icon: 'instagram' },
+  { name: 'YouTube', purpose: 'Platform guides and public walkthroughs', icon: 'youtube' },
+];
+
+function Community() {
+  // Unverified Telegram/X/Instagram/YouTube handles must never be treated as
+  // official channels. Real links will be added only after account verification.
+  const website = 'https://nexoramarketglobal.live/';
+  const shareUrl = encodeURIComponent(website);
+  const shareText = encodeURIComponent('Nexora Markets — explore the platform and launch status.');
+  return <section className="community-panel wide" id="community" aria-labelledby="community-title">
+    <div className="community-header">
+      <div className="community-heading">
+        <span className="small-overline">05 / NEXORA COMMUNITY</span>
+        <h2 id="community-title">Stay connected. Stay informed.</h2>
+        <p>Our social channels are being prepared. We only publish account links after confirming ownership, so you never land on an unrelated Nexora channel.</p>
+      </div>
+      <span className="community-status"><span className="community-status-dot"/> Official accounts pending</span>
+    </div>
+    <div className="community-cards" aria-label="Planned Nexora channels">
+      {socialChannels.map(channel => <article className="community-card" key={channel.name}>
+        <span className="community-icon"><Icon name={channel.icon} size={23}/></span>
+        <div className="community-card-text">
+          <h3>{channel.name}</h3>
+          <p>{channel.purpose}</p>
+        </div>
+        <span className="community-soon">Coming soon</span>
+      </article>)}
+    </div>
+    <div className="community-share">
+      <div><strong>Share the verified website</strong><p>Invite people to the site itself while official channels are being set up.</p></div>
+      <div className="community-share-actions">
+        <a href={`https://t.me/share/url?url=${shareUrl}&text=${shareText}`} target="_blank" rel="noopener noreferrer" aria-label="Share Nexora Markets website on Telegram"><Icon name="telegram" size={18}/> Share on Telegram</a>
+        <a href={`https://twitter.com/intent/tweet?url=${shareUrl}&text=${shareText}`} target="_blank" rel="noopener noreferrer" aria-label="Share Nexora Markets website on X"><Icon name="x" size={18}/> Share on X</a>
+      </div>
+    </div>
+    <p className="community-safety"><Icon name="shield" size={17}/> Security reminder: Nexora will never ask for your seed phrase, private key or a transfer to a personal support wallet.</p>
+  </section>;
+}
+
+
 function AccountModal({ onClose }) {
   useEffect(() => {
     function key(e) { if (e.key === 'Escape') onClose(); }
@@ -192,5 +241,5 @@ function AccountModal({ onClose }) {
 
 export default function App() {
   const [accountOpen, setAccountOpen] = useState(false);
-  return <><a className="skip-link" href="#main">Skip to content</a><Header onAccount={() => setAccountOpen(true)}/><main id="main"><Hero/><MarketTicker/><div className="wide dashboard"><PlanCards/><div className="side-column"><StatusPanel/><StatsPanel/></div></div><Benefits/><ExtraSections/></main><footer className="footer wide"><div className="footer-brand"><span className="brand-mark">N</span> Nexora <span>Markets</span></div><span>© {new Date().getFullYear()} Nexora Markets · Frontend preview, not a live financial product.</span><a href="#home">Back to top ↑</a></footer>{accountOpen && <AccountModal onClose={() => setAccountOpen(false)}/>}</>;
+  return <><a className="skip-link" href="#main">Skip to content</a><Header onAccount={() => setAccountOpen(true)}/><main id="main"><Hero/><MarketTicker/><div className="wide dashboard"><PlanCards/><div className="side-column"><StatusPanel/><StatsPanel/></div></div><Benefits/><ExtraSections/><Community/></main><footer className="footer wide"<div className="footer-brand"><span className="brand-mark">N</span> Nexora <span>Markets</span></div><span>© {new Date().getFullYear()} Nexora Markets · Frontend preview, not a live financial product.</span><a href="#community">Community</a><a href="#home">Back to top ↑</a></footer>{accountOpen && <AccountModal onClose={() => setAccountOpen(false)}/>}</>;
 }

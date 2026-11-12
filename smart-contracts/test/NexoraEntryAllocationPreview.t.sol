@@ -4,8 +4,8 @@ pragma solidity ^0.8.24;
 import {NexoraEntryAllocationPreview} from "../src/NexoraEntryAllocationPreview.sol";
 
 /**
- * Tests ONLY math/disclosure of a proposed entry + reinvest charge.
- * Does not implement or authorize live transfers from depositors.
+ * SOLVENT accounting previews. No code here routes any user deposit
+ * to an owner or company wallet.
  */
 contract NexoraEntryAllocationPreviewTest {
     NexoraEntryAllocationPreview private policy;
@@ -19,56 +19,66 @@ contract NexoraEntryAllocationPreviewTest {
         require(actual == expected, "Mismatch");
     }
 
-    function testOneThousandDepositHasOnlyEightHundredNetPrincipal() public view {
+    function testOneThousandUserBalanceAndRewardBasisRemainOneThousand() public view {
         NexoraEntryAllocationPreview.Allocation memory a = policy.preview(1_000 * U);
-        _eq(a.netPrincipal, 800 * U);
-        _eq(a.ownerCharge, 60 * U);
-        _eq(a.companyChargeEach, 14 * U);
-        _eq(a.roundingToNetPrincipal, 0);
-        _eq(a.netPrincipal + a.ownerCharge + 10 * a.companyChargeEach, 1_000 * U);
-        _eq(policy.previewDailyCap(a.netPrincipal), 160 * U);
+        _eq(a.creditedUserPrincipal, 1_000 * U);
+        _eq(a.rewardCalculationBasis, 1_000 * U);
+        _eq(a.ownerBonusFromIndependentFunds, 60 * U);
+        _eq(a.companyBonusEachFromIndependentFunds, 14 * U);
+        _eq(a.sponsorFundsRequired, 200 * U);
+        _eq(a.totalExternalTokensRequired, 1_200 * U);
+        _eq(policy.previewDailyCap(1_000 * U), 200 * U);
         _eq(policy.WITHDRAWAL_FEE_BPS(), 0);
     }
 
-    function testOneHundredFundedProfitReinvestHasEightyNetNewPrincipal() public view {
-        NexoraEntryAllocationPreview.Allocation memory a = policy.preview(100 * U);
-        _eq(a.netPrincipal, 80 * U);
-        _eq(a.ownerCharge, 6 * U);
-        _eq(a.companyChargeEach, 14 * U / 10);
-        _eq(a.netPrincipal + a.ownerCharge + 10 * a.companyChargeEach, 100 * U);
+    function testHundredRewardReinvestKeepsOneHundredAsNewPrincipal() public view {
+        NexoraEntryAllocationPreview.Allocation memory a = policy.previewReinvest(100 * U);
+        _eq(a.creditedUserPrincipal, 100 * U);
+        _eq(a.rewardCalculationBasis, 100 * U);
+        _eq(a.ownerBonusFromIndependentFunds, 6 * U);
+        _eq(a.companyBonusEachFromIndependentFunds, 14 * U / 10);
+        _eq(a.sponsorFundsRequired, 20 * U);
+        _eq(a.totalExternalTokensRequired, 20 * U);
+        // The 100 USDT moved from fully funded reward liability to principal,
+        // while the corporate company independently funds the 20 USDT payouts.
     }
 
-    function testNoRoundoffDustPaidToInsiders() public view {
-        NexoraEntryAllocationPreview.Allocation memory a = policy.preview(101);
-        _eq(a.ownerCharge, 6);
-        _eq(a.companyChargeEach, 1);
-        _eq(a.netPrincipal, 85);
-        _eq(a.netPrincipal + a.ownerCharge + 10 * a.companyChargeEach, 101);
-    }
-
-    function testInsiderChargeCannotExceed20PercentOfGross() public view {
-        for (uint256 i=1; i<100; ++i) {
-            NexoraEntryAllocationPreview.Allocation memory a = policy.preview(i);
-            uint256 insider = a.ownerCharge + 10 * a.companyChargeEach;
-            require(insider <= i / 5, "Excess charges");
-            _eq(a.netPrincipal + insider, i);
+    function testNoBonusPaidOutOfUsersBacking() public view {
+        for (uint256 gross = 1; gross < 150; ++gross) {
+            NexoraEntryAllocationPreview.Allocation memory a = policy.preview(gross);
+            _eq(a.creditedUserPrincipal, gross);
+            _eq(a.rewardCalculationBasis, gross);
+            _eq(a.totalExternalTokensRequired - a.sponsorFundsRequired, gross);
+            require(a.sponsorFundsRequired <= gross / 5, "Excess company bonus");
         }
     }
 
-    function testFuzz_NoMoneyCreatedByDepositFeeMath(uint96 raw) public view {
+    function testFuzz_PrincipalNeverDilutedAndAllFundingMustBeCovered(uint96 raw) public view {
         uint256 gross = uint256(raw) + 1;
         NexoraEntryAllocationPreview.Allocation memory a = policy.preview(gross);
-        _eq(a.netPrincipal + a.ownerCharge + 10 * a.companyChargeEach, gross);
-        require(a.netPrincipal >= gross * 4 / 5, "Less than disclosed net principal");
-        require(a.ownerCharge <= gross * 600 / 10_000, "Owner fee too high");
-        require(a.companyChargeEach <= gross * 140 / 10_000, "Company fee too high");
+        _eq(a.creditedUserPrincipal, gross);
+        _eq(a.rewardCalculationBasis, gross);
+        _eq(a.totalExternalTokensRequired, gross + a.sponsorFundsRequired);
+        _eq(a.sponsorFundsRequired,
+            a.ownerBonusFromIndependentFunds + 10 * a.companyBonusEachFromIndependentFunds);
+        require(a.sponsorFundsRequired <= gross / 5, "Over 20 percent");
+        require(a.ownerBonusFromIndependentFunds <= gross * 600 / 10_000, "Owner over cap");
+        require(a.companyBonusEachFromIndependentFunds <= gross * 140 / 10_000, "Company over cap");
     }
 
-    function testZeroGrossRejected() public {
+    function testFuzz_AlreadyFundedReinvestRequiresOnlySeparateCorporateSubsidy(uint96 raw) public view {
+        uint256 reward = uint256(raw) + 1;
+        NexoraEntryAllocationPreview.Allocation memory a = policy.previewReinvest(reward);
+        _eq(a.creditedUserPrincipal, reward);
+        _eq(a.totalExternalTokensRequired, a.sponsorFundsRequired);
+        _eq(a.rewardCalculationBasis, reward);
+    }
+
+    function testNoZeroGross() public {
         bool failed;
         try policy.preview(0) returns (NexoraEntryAllocationPreview.Allocation memory) {} catch {
             failed = true;
         }
-        require(failed, "Zero gross accepted");
+        require(failed, "Zero amount accepted");
     }
 }

@@ -6,6 +6,7 @@ on:
       - feature/nexora-mainnet-preflight-20261113
       - feature/nexora-90day-withdrawal-policy-review
       - feature/nexora-v2-security-markets-20261113
+      - feature/nexora-full-credit-backed-capital-20261113
     paths:
       - 'smart-contracts/**'
       - '.github/workflows/nexora-mainnet-readiness.yml'

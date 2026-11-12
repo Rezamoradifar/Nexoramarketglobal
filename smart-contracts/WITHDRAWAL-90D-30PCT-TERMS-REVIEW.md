@@ -28,6 +28,16 @@ If no reward is credited, a fee on the whole amount makes an initial 1,000 USDT 
 
 **The recipient/beneficiary of the 30% fee is also not specified**: it cannot silently be assigned to the owner, partners, or reward pool. Reserve accounting and fee withdrawals need separately documented legal/economic justification.
 
+## New owner conditions: 20% withdrawal cap and Reinvest
+
+The owner also specified: **"سقف برداشت ۲۰ درصد اکانت واریزی؛ ری اینوست دارد"**.
+
+Current working rule: maximum gross withdrawal in an explicitly defined period = **20% of the eligible externally deposited capital basis**, net of gross amounts already withdrawn in that period. Repeated transactions must be **cumulatively tracked**, not allowed to evade the cap. Eligible, fully funded rewards may be optionally **reinvested** by the user into a separately dated principal tranche; the proposed accounting does not manufacture additional profit.
+
+The cap period has **not** been specified, nor whether the basis includes reinvested amounts. The earlier 30% fee base and destination remain unresolved. **This must not be silently guessed or deployed into an immutable contract.**
+
+See [WITHDRAWAL-CAP-REINVEST-PROPOSAL.md](./WITHDRAWAL-CAP-REINVEST-PROPOSAL.md) and the non-operative pure-math helper [NexoraWithdrawalPolicyPreview.sol](./src/NexoraWithdrawalPolicyPreview.sol).
+
 ## Preliminary time-lock specification (not yet coded)
 
 - Default technical interpretation of "three months" is **90 x 24-hour periods**, measured on-chain; calendar-month semantics would need a different policy.

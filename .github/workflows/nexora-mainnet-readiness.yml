@@ -1,0 +1,41 @@
+name: Nexora Mainnet Readiness CI
+
+on:
+  push:
+    branches:
+      - feature/nexora-mainnet-preflight-20261113
+    paths:
+      - 'smart-contracts/**'
+      - '.github/workflows/nexora-mainnet-readiness.yml'
+  pull_request:
+    paths:
+      - 'smart-contracts/**'
+      - '.github/workflows/nexora-mainnet-readiness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Build and test Nexora preflight
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: smart-contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Install pinned OpenZeppelin
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Build Solidity
+        run: forge build --sizes
+      - name: Test all invariants
+        run: forge test -vv
+      - name: Validate read-only preflight syntax
+        run: bash -n preflight-mainnet.sh

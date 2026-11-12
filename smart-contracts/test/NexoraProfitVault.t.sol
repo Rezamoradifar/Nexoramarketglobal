@@ -186,4 +186,33 @@ contract NexoraProfitVaultTest {
         _expectFailure(abi.encodeCall(NexoraProfitVault.deposit, (100 * U, BOB)));
         _assertEq(vault.totalPrincipal(), 0);
     }
+
+    function testFuzz_PrincipalAlwaysWithdrawable(uint96 randomAmount) public {
+        // Exercises 10 to 50,000 USDT under fuzzing, with no yield pool.
+        uint256 amount = 10 * U + uint256(randomAmount) % (49_990 * U + 1);
+        _deposit(ALICE, amount, address(0));
+        _assertEq(vault.totalPrincipal(), amount);
+        _assertEq(vault.unallocatedRewards(), 0);
+        uint256 original = token.balanceOf(ALICE);
+        vm.prank(ALICE);
+        vault.withdrawPrincipal(amount);
+        _assertEq(token.balanceOf(ALICE), original + amount);
+        _assertEq(vault.totalPrincipal(), 0);
+        require(vault.isSolvent(), "Vault must remain solvent after full exit");
+    }
+
+    function testFuzz_CannotCreditAboveActualCap(uint96 randomAmount) public {
+        uint256 amount = 10 * U + uint256(randomAmount) % (49_990 * U + 1);
+        _deposit(ALICE, amount, address(0));
+        vm.warp(block.timestamp + 1 days);
+        uint256 cap = amount * 100 / 10_000; // VIP 01: 1%, no referrals
+        vault.fundRewards(cap + 1);
+        _expectFailure(
+            abi.encodeCall(NexoraProfitVault.allocateReward, (ALICE, cap + 1, bytes32(uint256(50))))
+        );
+        vault.allocateReward(ALICE, cap, bytes32(uint256(51)));
+        _assertEq(vault.unallocatedRewards(), 1);
+        _assertEq(vault.getAccount(ALICE).baseRewards, cap);
+        require(vault.isSolvent(), "Funded rewards and principal remain backed");
+    }
 }

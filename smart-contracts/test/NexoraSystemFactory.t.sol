@@ -69,8 +69,8 @@ contract NexoraSystemFactoryTest {
         require(router.hasRole(router.GUARDIAN_ROLE(), ADMIN), "Governance missing router guardian");
         require(router.hasRole(router.REVENUE_FUNDER_ROLE(), address(this)), "Funder missing");
         require(vault.hasRole(vault.ALLOCATOR_ROLE(), ALLOCATOR), "Allocator missing");
-        _eq(splitter.sharesBps(0), 5_000);
-        for (uint256 i = 1; i < 11; ++i) _eq(splitter.sharesBps(i), 500);
+        _eq(splitter.shareWeights(0), 50);
+        for (uint256 i = 1; i < 11; ++i) _eq(splitter.shareWeights(i), 7);
     }
 
     function testFactoryRevenueRoutingAndUserWithdrawal() public {
@@ -86,15 +86,19 @@ contract NexoraSystemFactoryTest {
         token.approve(address(router), 1_000 * U);
         router.fundAndRoute(1_000 * U, bytes32(uint256(1)));
         _eq(vault.totalPrincipal(), 100 * U);
-        _eq(vault.unallocatedRewards(), 800 * U);
-        _eq(splitter.totalClaimable(), 200 * U);
+        _eq(vault.unallocatedRewards(), 760 * U);
+        _eq(splitter.totalClaimable(), 240 * U);
         _eq(splitter.claimable(recipients[0]), 100 * U);
         for (uint256 i = 1; i < 11; ++i) {
-            _eq(splitter.claimable(recipients[i]), 10 * U);
+            _eq(splitter.claimable(recipients[i]), 14 * U);
         }
         uint256 balanceBefore = token.balanceOf(USER);
-        vm.prank(USER);
-        vault.withdrawPrincipal(100 * U);
+        vm.warp(block.timestamp + 90 days);
+        for (uint256 i; i < 5; ++i) {
+            vm.prank(USER);
+            vault.withdrawPrincipal(20 * U);
+            vm.warp(block.timestamp + 1 days);
+        }
         _eq(token.balanceOf(USER), balanceBefore + 100 * U);
         _eq(vault.totalPrincipal(), 0);
         require(vault.isSolvent() && splitter.isSolvent(), "Not solvent");

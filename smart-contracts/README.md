@@ -73,3 +73,34 @@ Only the **admin** has `DEFAULT_ADMIN_ROLE` (and can grant/revoke roles). The ad
 7. Investor-facing text must state that caps are hypothetical and payouts depend on actual available realized profit; no guaranteed returns.
 
 No investment contract has been deployed or enabled by committing this code.
+
+## Owner plus ten additional payout wallets
+
+The optional **NexoraRevenueSplitter.sol** is independent of the investor vault. It has exactly **11 recipients**: the owner wallet at index 0, plus ten other wallets at indices 1–10.
+
+- Wallet addresses and percentages are supplied as constructor arguments. Every wallet must be unique and nonzero, with a positive share. All 11 basis-point shares must sum to 10,000 (100%).
+- **No percentages have been agreed for the real platform.** Test cases use 20% for the owner and 8% for each of ten other addresses solely as an example; they are not live terms.
+- The 100% total is of **the revenue intentionally deposited in this splitter**, not 100% of user deposits and not necessarily 100% of the operator's gross revenue.
+- No wallet receives any funds until an authorized funder transfers tokens into this contract for a specific, unique accounting evidence ID. The evidence ID is not proof of realized profit.
+- Once funded, the contract records fully backed claimable balances. Each recipient claims its own share; even the admin cannot claim someone else's balance.
+- Addresses and percentages are **immutable** after deployment. For a change, deploy a new splitter and explicitly settle the old splitter's pending claims.
+- Administrators can pause new funding, but beneficiaries can still claim existing shares. There is no sweep or arbitrary recipient-payout function.
+- This module has **no automatic link** to investor deposits, the NexoraProfitVault, a trading system or website. Do not suggest that on-chain funding establishes that a strategy generated a profit.
+
+### Constructor parameters
+
+```solidity
+NexoraRevenueSplitter(
+    address token,           // 18-decimal verified BEP-20 token
+    address adminMultisig,   // governance and emergency pausing
+    address fundingWallet,   // sole account permitted to fund distributions
+    address[11] wallets,     // index 0 is owner, indices 1..10 are others
+    uint16[11] sharesBps     // all positive, total 10_000
+)
+```
+
+User wallets do not need private keys shared in chat. Only their public wallet addresses should be provided for the deployment parameters. An independent audit, published funding-account policy and legal review are mandatory before any real-money launch.
+
+### Economics still to decide
+
+The owner and ten wallet shares are not yet specified. Before deploying, determine: (a) the exact business revenue basis, (b) each of the 11 wallet addresses, (c) the 11 shares in basis points, and (d) whether a larger reserve is retained *before* funding this splitter. None of these should be silently guessed.

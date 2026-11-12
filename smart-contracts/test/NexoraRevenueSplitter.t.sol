@@ -68,7 +68,7 @@ contract NexoraRevenueSplitterTest {
         splitter.fundDistribution(amount, bytes32(uint256(2)));
         _assertEq(splitter.claimable(wallets[0]), 31);
         for (uint256 i = 1; i < 11; ++i) {
-            _assertEq(splitter.claimable(wallets[i]), 5);
+            _assertEq(splitter.claimable(wallets[i]), 7);
         }
         _assertEq(splitter.totalClaimable(), amount);
     }

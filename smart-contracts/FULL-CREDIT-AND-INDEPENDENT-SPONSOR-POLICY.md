@@ -45,6 +45,6 @@ In the existing V2 draft only: 90-day lock on independently dated capital tranch
 
 ## Release restrictions
 
-This remains a separate, unmerged branch. The earlier [upfront 24% fee review](../DEPOSIT-AND-REINVEST-FEE-REVIEW.md) documented the incompatible 76%-net-credit interpretation. **This full-credit request supersedes that interpretation**, but the lack of an actual company funding source means production deployment and automatic allocations are not authorized.
+This remains a separate, unmerged branch. The earlier upfront 24% fee review in the separate, superseded branch documented the incompatible 76%-net-credit interpretation. **This full-credit request supersedes that interpretation**, but the lack of an actual company funding source means production deployment and automatic allocations are not authorized.
 
 Before mainnet: verify all 11 receiving addresses, multisig roles, independently funded company budget, accurate external profit records, user consent, independent smart-contract security audit, economic/legal review, actual BNB testnet tests, and 100% collateral reserves. Never share private keys or seed phrases.

@@ -20,16 +20,16 @@ contract NexoraRevenueSplitterTest {
 
     function setUp() public {
         token = new MockUSDT();
-        // TEST FIXTURES ONLY: 20% owner and 8% each for ten other addresses.
-        // PRODUCTION shares must be agreed before deploying a fresh contract.
+        // Fixed 50% of recipient pool to owner, 5% each to ten partners.
+        // Router provides precisely 20% of gross revenue to this splitter.
         wallets[0] = address(0x100);
-        bps[0] = 2_000;
+        bps[0] = 5_000;
         for (uint256 i = 1; i < 11; ++i) {
             wallets[i] = address(uint160(0x100 + i));
-            bps[i] = 800;
+            bps[i] = 500;
         }
         splitter = new NexoraRevenueSplitter(
-            address(token), address(this), address(this), wallets, bps
+            address(token), address(this), address(this), wallets
         );
         token.mint(address(this), 2_000_000 * U);
         token.approve(address(splitter), type(uint256).max);
@@ -46,9 +46,9 @@ contract NexoraRevenueSplitterTest {
 
     function testOwnerAndTenWalletsArePaidInExactRatios() public {
         splitter.fundDistribution(100 * U, bytes32(uint256(1)));
-        _assertEq(splitter.claimable(wallets[0]), 20 * U);
+        _assertEq(splitter.claimable(wallets[0]), 50 * U);
         for (uint256 i = 1; i < 11; ++i) {
-            _assertEq(splitter.claimable(wallets[i]), 8 * U);
+            _assertEq(splitter.claimable(wallets[i]), 5 * U);
         }
         _assertEq(splitter.totalFunded(), 100 * U);
         _assertEq(splitter.totalClaimable(), 100 * U);
@@ -57,18 +57,18 @@ contract NexoraRevenueSplitterTest {
         uint256 beforeOwnerBalance = token.balanceOf(wallets[0]);
         vm.prank(wallets[0]);
         splitter.claim();
-        _assertEq(token.balanceOf(wallets[0]), beforeOwnerBalance + 20 * U);
-        _assertEq(splitter.totalClaimed(), 20 * U);
-        _assertEq(splitter.totalClaimable(), 80 * U);
+        _assertEq(token.balanceOf(wallets[0]), beforeOwnerBalance + 50 * U);
+        _assertEq(splitter.totalClaimed(), 50 * U);
+        _assertEq(splitter.totalClaimable(), 50 * U);
         require(splitter.isSolvent(), "Should remain solvent");
     }
 
     function testRoundingDustGoesToOwnerNotToTheOperator() public {
         uint256 amount = 101; // just 101 wei, smallest token units
         splitter.fundDistribution(amount, bytes32(uint256(2)));
-        _assertEq(splitter.claimable(wallets[0]), 21);
+        _assertEq(splitter.claimable(wallets[0]), 51);
         for (uint256 i = 1; i < 11; ++i) {
-            _assertEq(splitter.claimable(wallets[i]), 8);
+            _assertEq(splitter.claimable(wallets[i]), 5);
         }
         _assertEq(splitter.totalClaimable(), amount);
     }
@@ -108,32 +108,26 @@ contract NexoraRevenueSplitterTest {
         );
         vm.prank(wallets[1]);
         splitter.claim();
-        _assertEq(token.balanceOf(wallets[1]), 8 * U);
+        _assertEq(token.balanceOf(wallets[1]), 5 * U);
     }
 
-    function testInvalidSharesAreRejected() public {
-        uint16[11] memory wrong = bps;
-        wrong[1] = 801;
-        try new NexoraRevenueSplitter(
-            address(token), address(this), address(this), wallets, wrong
-        ) {
-            revert("Shares not rejected");
-        } catch {}
-
-        wrong = bps;
-        wrong[1] = 0;
-        try new NexoraRevenueSplitter(
-            address(token), address(this), address(this), wallets, wrong
-        ) {
-            revert("Zero share not rejected");
-        } catch {}
+    function testDistributionPercentagesAreFixedAndNotCallerControlled() public {
+        _assertEq(splitter.OWNER_POOL_BPS(), 5_000);
+        _assertEq(splitter.PARTNER_POOL_BPS(), 500);
+        _assertEq(splitter.sharesBps(0), 5_000);
+        uint256 totalBps = splitter.sharesBps(0);
+        for (uint256 i = 1; i < 11; ++i) {
+            _assertEq(splitter.sharesBps(i), 500);
+            totalBps += splitter.sharesBps(i);
+        }
+        _assertEq(totalBps, 10_000);
     }
 
     function testDuplicateRecipientsAreRejected() public {
         address[11] memory invalid = wallets;
         invalid[10] = invalid[0];
         try new NexoraRevenueSplitter(
-            address(token), address(this), address(this), invalid, bps
+            address(token), address(this), address(this), invalid
         ) {
             revert("Duplicate recipients not rejected");
         } catch {}

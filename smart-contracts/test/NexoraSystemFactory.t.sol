@@ -69,7 +69,7 @@ contract NexoraSystemFactoryTest {
         require(router.hasRole(router.GUARDIAN_ROLE(), ADMIN), "Governance missing router guardian");
         require(router.hasRole(router.REVENUE_FUNDER_ROLE(), address(this)), "Funder missing");
         require(vault.hasRole(vault.ALLOCATOR_ROLE(), ALLOCATOR), "Allocator missing");
-        _eq(splitter.shareWeights(0), 50);
+        _eq(splitter.shareWeights(0), 30);
         for (uint256 i = 1; i < 11; ++i) _eq(splitter.shareWeights(i), 7);
     }
 
@@ -86,9 +86,9 @@ contract NexoraSystemFactoryTest {
         token.approve(address(router), 1_000 * U);
         router.fundAndRoute(1_000 * U, bytes32(uint256(1)));
         _eq(vault.totalPrincipal(), 100 * U);
-        _eq(vault.unallocatedRewards(), 760 * U);
-        _eq(splitter.totalClaimable(), 240 * U);
-        _eq(splitter.claimable(recipients[0]), 100 * U);
+        _eq(vault.unallocatedRewards(), 800 * U);
+        _eq(splitter.totalClaimable(), 200 * U);
+        _eq(splitter.claimable(recipients[0]), 60 * U);
         for (uint256 i = 1; i < 11; ++i) {
             _eq(splitter.claimable(recipients[i]), 14 * U);
         }

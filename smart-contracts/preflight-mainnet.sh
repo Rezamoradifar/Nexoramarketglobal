@@ -65,8 +65,10 @@ echo 'Admin address has code (this does not verify signers or threshold).'
 
 echo
 echo 'CONTRACT RULES:'
-echo '  80% separately funded business revenue -> vault reward reserve'
-echo '  10% -> owner; 1% each -> ten partners'
+echo '  80% independently funded business revenue -> vault reward reserve'
+echo '  6% -> owner; 1.4% each -> ten company wallets'
+echo '  100% of each new deposit remains protected user principal'
+echo '  Company payout for a deposit/reinvest requires NEW outside funds, not a deduction from principal'
 echo '  100% of each user deposit remains in principal custody'
 echo '  User deposits must NEVER be routed as business revenue'
 echo

@@ -8,9 +8,9 @@
 | --- | --- |
 | Network | BNB Smart Chain Mainnet — chain ID **56**, not testnet chain ID 97 |
 | Token | Binance-Peg USDT (BSC-USD), `0x55d398326f99059fF775485246999027B3197955`, **18 decimals**; not Tether-native Ethereum USDT |
-| Principal custody | **100%** of each user's deposits remain user-owned and withdrawable; do **not** route deposits into revenue |
+| Principal custody | **100%** of each user's deposit is retained as backed principal and is the conditional reward basis; withdrawals obey a disclosed 90-day tranche maturity and 20%/24h cap, with 0% fee |
 | Distributable revenue | Only independent, documented, actually funded operator revenue may enter the router |
-| Revenue split | **80%** reward-reserve vault, **10%** owner, **1% each** of ten partner wallets |
+| Independently funded business revenue split | **80%** reward-reserve vault, **6%** owner, **1.4% each** of ten company wallets |
 | Reward model | Only pre-funded allocations, maximum conditional **1%–2.5%** per day, no promised/guaranteed returns |
 | Referral model | Pre-funded 15% / 7% / 3% of a credited base reward, **never of deposits** |
 | Contracts | `NexoraProfitVault`, `NexoraRevenueSplitter`, `NexoraRevenueRouter`; deployed atomically via `NexoraSystemFactory` |
@@ -18,9 +18,15 @@
 | Deployer | Prefer a hardware-backed wallet. NEVER store keys/seed phrases in GitHub, frontend, server or chat |
 | Governance | A deployed, independently verified **multisig** with published owners and approval threshold; timelock strongly recommended |
 
+## Latest deposit/Reinvest accounting — DO NOT treat company shares as deductions from full user principal
+
+See [gross user principal / sponsor-funded bonuses](./GROSS-PRINCIPAL-SPONSORED-COMPANY-PAYOUTS.md). A user deposit of **1,000 USDT** is credited as **1,000 USDT fully backed principal**, and the eligible tier's reward cap uses the same **1,000 USDT**. The owner may receive **60 USDT** and each of ten company wallets **14 USDT** *only if independently sourced company funding supplies an extra 200 USDT*. It is misleading and financially insolvent to deduct that 200 USDT from the user deposit while telling the customer all 1,000 USDT remain protected.
+
+Already-funded user rewards reinvest at their **full amount**, with no reduction in the user's backed principal. A separate company bonus subsidy must be supplied before any company payouts are made for reinvest events. **No automatic deposit/Reinvest commission source contract has been audited or integrated.** No deposits may be enabled until on-chain resources and liabilities reconcile.
+
 ## Gates: ALL must pass before any mainnet deployment
 
-- [x] Revenue split fixed in source code (80/10/1×10) and tests.
+- [x] Independently funded revenue splitter fixes 80% reserve / 6% owner / 1.4% for each of 10 company wallets, independently of user principal.
 - [x] Mainnet chain-ID and token-address gates in the factory.
 - [x] Atomic bootstrap of vault, splitter, router, and handoff to a distinct admin governance address.
 - [x] Read-only technical preflight tool that checks chain ID, token decimals, and public address uniqueness.
@@ -31,7 +37,8 @@
 - [ ] **11 public beneficiary addresses**: one owner plus ten partner wallets, with signed partner agreements. No placeholder or invented addresses.
 - [ ] Independently deployed and verified **multisig admin**, documented signers, approval threshold, and incident response.
 - [ ] Governance/timelock policy for role grants, revocations and allocator selection; no single party can silently redefine payouts.
-- [ ] Independent revenue **source-of-funds and realized-profit** accounting, public reporting and a ban on using deposits to fund reward/partner distributions.
+- [ ] Independent revenue **source-of-funds and realized-profit** accounting, public reporting and a ban on using deposits or reinvested user rewards to fund owner/company bonuses.
+- [ ] **Deposit/Reinvest-linked company bonus mechanism** that transfers 6%/1.4% exclusively from an extra 20% of genuinely independent company funds; the present router is NOT a deposit trigger and cannot be presented as one.
 - [ ] Legal/regulatory review covering investor disclosures, marketing claims, USDT custody, KYC/AML, jurisdictional restrictions and operator revenue sharing.
 - [ ] Operational scenario tests: USDT adverse behavior, RPC outage, pause and recovery, frontend mismatch, disaster recovery and monitoring.
 - [ ] UI domain/SSL verification and **one authoritative site**, preserving existing design. Until then wallet connection, deposits and claims stay off.
@@ -88,7 +95,7 @@ export NEXORA_FACTORY_ADDRESS="0x<deployed-factory-address>"
 bash postdeploy-readonly.sh
 ```
 
-This verifies that the factory's vault, splitter and router agree on the token and addresses; that payout ratios are 80/10/1x10; that the multisig owns vault/splitter administration; that routine funding is delegated to the router; that the factory no longer controls them; and that recorded liabilities are backed by token balances. It **cannot** verify all historic role grants, independent audits, strategy profits, token-issuer risks, multisig signers, or jurisdiction-specific compliance. Success means `NEXORA_POSTDEPLOY_READONLY_OK`, **not** approval to onboard investors.
+This verifies that the factory's vault, splitter and router agree on the token and addresses; that independently funded payout ratios are 80/6/1.4x10; that the multisig owns vault/splitter administration; that routine funding is delegated to the router; that the factory no longer controls them; and that recorded liabilities are backed by token balances. It **cannot** verify all historic role grants, independent audits, strategy profits, token-issuer risks, multisig signers, or jurisdiction-specific compliance. Success means `NEXORA_POSTDEPLOY_READONLY_OK`, **not** approval to onboard investors.
 
 ## Known design and compliance limitations
 

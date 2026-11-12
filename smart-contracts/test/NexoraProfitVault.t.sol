@@ -50,6 +50,37 @@ contract NexoraProfitVaultTest {
         require(!success, "Expected operation to revert");
     }
 
+    function testGrossOneThousandStaysFullyFundedAndIsProfitCalculationBasis() public {
+        // No company or owner shares leave the user vault on a deposit.
+        _deposit(ALICE, 1_000 * U, address(0));
+        _assertEq(vault.getAccount(ALICE).principal, 1_000 * U);
+        _assertEq(vault.totalPrincipal(), 1_000 * U);
+        _assertEq(vault.externalDepositBasis(ALICE), 1_000 * U);
+        _assertEq(token.balanceOf(address(vault)), 1_000 * U);
+        _assertEq(vault.remainingWithdrawalCap(ALICE), 200 * U);
+        require(vault.isSolvent(), "Depositor must be fully backed");
+
+        // One-day eligibility: base reward is capped against 1,000 USDT,
+        // not a fictional 800 USDT post-fee principal.
+        vm.warp(block.timestamp + 1 days);
+        _assertEq(vault.tierBps(ALICE), 100); // 1% tier
+        vault.fundRewards(10 * U);
+        vault.allocateReward(ALICE, 10 * U, bytes32(uint256(2_005)));
+        _assertEq(vault.getAccount(ALICE).baseRewards, 10 * U);
+        _assertEq(vault.getAccount(ALICE).principal, 1_000 * U);
+        _assertEq(token.balanceOf(address(vault)), 1_010 * U);
+        require(vault.isSolvent(), "No unfunded rewards or diluted principal");
+
+        vm.warp(block.timestamp + 90 days);
+        uint256 before = token.balanceOf(ALICE);
+        vm.prank(ALICE);
+        vault.withdrawPrincipal(200 * U);
+        _assertEq(token.balanceOf(ALICE), before + 200 * U);
+        _assertEq(vault.totalPrincipal(), 800 * U);
+        _assertEq(vault.WITHDRAWAL_FEE_BPS(), 0);
+        require(vault.isSolvent(), "Fully backed after withdrawal");
+    }
+
     function testPrincipalIsWithdrawableWhilePaused() public {
         _deposit(ALICE, 100 * U, address(0));
         _assertEq(vault.totalPrincipal(), 100 * U);

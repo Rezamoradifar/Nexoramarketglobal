@@ -49,13 +49,13 @@ same "$(call "$ROUTER" 'splitter()(address)')" "$SPLITTER" 'Router splitter'
 same "$(call "$FACTORY" 'governanceAdmin()(address)')" "$NEXORA_ADMIN_MULTISIG" 'Admin'
 expect "$(call "$ROUTER" 'VAULT_BPS()(uint256)')" '8000' 'Vault percentage'
 expect "$(call "$ROUTER" 'WALLETS_BPS()(uint256)')" '2000' 'Wallet pool percentage'
-expect "$(call "$SPLITTER" 'sharesBps(uint256)(uint16)' 0)" '5000' 'Owner split percentage'
+expect "$(call "$SPLITTER" 'shareWeights(uint256)(uint16)' 0)" '30' 'Owner share of corporate pool'
 same "$(call "$SPLITTER" 'payoutWallets(uint256)(address)' 0)" "$NEXORA_OWNER_WALLET" 'Owner wallet'
 for n in $(seq -w 1 10); do
   index=$((10#$n))
   partvar="NEXORA_PARTNER_$n"
   same "$(call "$SPLITTER" 'payoutWallets(uint256)(address)' "$index")" "${!partvar}" "Partner $n"
-  expect "$(call "$SPLITTER" 'sharesBps(uint256)(uint16)' "$index")" '500' "Partner $n split percentage"
+  expect "$(call "$SPLITTER" 'shareWeights(uint256)(uint16)' "$index")" '7' "Company $n share of corporate pool"
 done
 
 for c in "$VAULT" "$SPLITTER"; do
@@ -75,6 +75,7 @@ echo "Factory: $FACTORY"
 echo "Vault: $VAULT"
 echo "Splitter: $SPLITTER"
 echo "Router: $ROUTER"
-echo "80% vault / 10% owner / 1% each partner verified ON CHAIN."
+echo "80% reserve / 6% owner / 1.4% each of ten company wallets verified ON CHAIN."
+echo "NOTE: deposit-linked bonuses from independently sponsored funds are not yet implemented."
 echo "This does NOT verify audits, legal clearance, all historical admin grants,"
 echo "business profits, site security, token peg, or user-KYC policies."

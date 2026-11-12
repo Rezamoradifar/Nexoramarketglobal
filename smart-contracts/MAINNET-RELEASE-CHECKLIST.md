@@ -78,6 +78,18 @@ If any chain, token, address, uniqueness, or admin-contract check fails, the scr
 
 Mainnet deployment is deliberately NOT automated in this branch. A manual signed deployment, approved bytecode and a published BscScan verification report are required after independent audit sign-off. No private-key examples are provided.
 
+### Postdeployment verification (READ ONLY)
+
+After an independently approved mainnet deployment, document the factory transaction hash and address. Export `NEXORA_FACTORY_ADDRESS` along with the same BSC RPC URL and public beneficiary addresses used in the preflight. Run:
+
+```bash
+cd smart-contracts
+export NEXORA_FACTORY_ADDRESS="0x<deployed-factory-address>"
+bash postdeploy-readonly.sh
+```
+
+This verifies that the factory's vault, splitter and router agree on the token and addresses; that payout ratios are 80/10/1x10; that the multisig owns vault/splitter administration; that routine funding is delegated to the router; that the factory no longer controls them; and that recorded liabilities are backed by token balances. It **cannot** verify all historic role grants, independent audits, strategy profits, token-issuer risks, multisig signers, or jurisdiction-specific compliance. Success means `NEXORA_POSTDEPLOY_READONLY_OK`, **not** approval to onboard investors.
+
 ## Known design and compliance limitations
 
 - No trading bot or trustless proof of financial profit exists. Allocator reports are not an oracle that independently proves the earnings.

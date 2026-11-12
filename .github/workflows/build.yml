@@ -16,4 +16,4 @@ jobs:
       - name: Build frontend
         run: npm run build
       - name: Check VPS deployment script syntax
-        run: bash -n deploy/repair-live.sh
+        run: bash -n deploy/repair-live.sh deploy/connect-domain-ssl.sh

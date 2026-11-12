@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 /**
- * NexoraProfitVault v0.1 - UN-AUDITED TESTNET PROTOTYPE.
+ * NexoraProfitVault v0.2 - UN-AUDITED TESTNET PROTOTYPE.
  *
  * Holds user principal separately from operator-funded rewards.
  * Allocations are NOT automatic, guaranteed, or proofs of trading profit:
@@ -27,7 +27,11 @@ contract NexoraProfitVault is AccessControl, Pausable, ReentrancyGuard {
     uint256 public constant MIN_DEPOSIT = 10 * UNIT;
     uint256 public constant MIN_ACTIVE_DIRECT = 100 * UNIT;
     uint256 public constant MAX_PERSONAL_CAPITAL = 50_000 * UNIT;
-    uint256 public constant MATURITY = 1 days;
+    uint256 public constant MATURITY = 1 days; // rank qualification only
+    uint256 public constant WITHDRAWAL_LOCK = 90 days;
+    uint256 public constant WITHDRAWAL_WINDOW = 1 days;
+    uint256 public constant MAX_WITHDRAWAL_BPS = 2_000; // 20% each anchored 24h window
+    uint256 public constant WITHDRAWAL_FEE_BPS = 0; // explicit no-fee withdrawals
     uint256 public constant BPS = 10_000;
     uint256 public constant MAX_DIRECT_CHILDREN = 128;
 
@@ -39,12 +43,26 @@ contract NexoraProfitVault is AccessControl, Pausable, ReentrancyGuard {
         uint256 baseRewards;        // fully funded, claimable
         uint256 referralRewards;    // fully funded, claimable
         uint256 lastDepositAt;      // ALL deposits reset 24h eligibility
+        uint256 firstDepositAt;     // reward lock begins at FIRST deposit
         uint256 lastCreditAt;       // minimum 24h between allocations
         uint32 activeDirects;       // updated through syncDirect()
         bool everDeposited;
         bool countedInParent;
     }
 
+    struct PrincipalTranche {
+        uint256 remaining;
+        uint64 unlockAt;
+    }
+    struct WithdrawalWindow {
+        uint64 startedAt;
+        uint256 spentGross;
+    }
+
+    mapping(address => PrincipalTranche[]) private _principalTranches;
+    mapping(address => uint256) private _nextTranche;
+    mapping(address => WithdrawalWindow) public withdrawalWindows;
+    mapping(address => uint256) public externalDepositBasis; // excludes Reinvest
     mapping(address => Account) private _accounts;
     mapping(address => address[]) private _children;
     mapping(address => uint256) public teamVolume; // 3-level active principal
@@ -58,6 +76,9 @@ contract NexoraProfitVault is AccessControl, Pausable, ReentrancyGuard {
     event Joined(address indexed member, address indexed referrer);
     event Deposited(address indexed member, uint256 amount, uint256 totalPrincipalOfMember);
     event PrincipalWithdrawn(address indexed member, uint256 amount);
+    event Reinvested(address indexed member, uint256 amount, uint256 unlockAt);
+    event WithdrawalWindowUsed(address indexed member, uint256 grossAmount, uint256 windowStartedAt);
+    event WithdrawalPolicy(address indexed member, uint256 grossAmount, uint256 feeAmount);
     event DirectSynced(address indexed member, address indexed parent, bool counted);
     event RewardPoolFunded(address indexed funder, uint256 amount);
     event RewardAllocated(address indexed member, bytes32 indexed reportId, uint256 baseAmount, uint256 referralTotal, uint16 tierBps);
@@ -79,6 +100,8 @@ contract NexoraProfitVault is AccessControl, Pausable, ReentrancyGuard {
     error InsufficientRewardPool();
     error FeeOnTransferNotSupported();
     error InsufficientPrincipal();
+    error WithdrawalLimitExceeded();
+    error NoMaturedTranche();
 
     constructor(address token_, address admin_, address funder_, address allocator_) {
         if (token_ == address(0) || admin_ == address(0) ||
@@ -116,6 +139,7 @@ contract NexoraProfitVault is AccessControl, Pausable, ReentrancyGuard {
                 _children[referrer_].push(msg.sender);
             }
             a.everDeposited = true;
+            a.firstDepositAt = block.timestamp;
             emit Joined(msg.sender, referrer_);
         } else if (referrer_ != address(0) && referrer_ != a.referrer) {
             revert InvalidReferrer();
@@ -135,19 +159,27 @@ contract NexoraProfitVault is AccessControl, Pausable, ReentrancyGuard {
 
         a.principal = afterDeposit;
         a.lastDepositAt = block.timestamp;
+        externalDepositBasis[msg.sender] += amount;
+        _principalTranches[msg.sender].push(PrincipalTranche(amount, uint64(block.timestamp + WITHDRAWAL_LOCK)));
         totalPrincipal += amount;
         _updateTeamVolume(msg.sender, amount, true);
         emit Deposited(msg.sender, amount, afterDeposit);
     }
 
     /**
-     * Users can always withdraw their own principal, even during an emergency pause.
-     * Neither an operator nor a referrer can make this withdrawal on the user's behalf.
+     * Withdraw only a user's OWN matured principal after 90 days.
+     * Gross withdrawals and reward claims share a 20% cap of lifetime
+     * external deposits per anchored 24-hour window; all fees are ZERO.
+     * No owner, admin, funder, allocator or company partner can call
+     * this function on someone else's behalf.
      */
     function withdrawPrincipal(uint256 amount) external nonReentrant {
         Account storage a = _accounts[msg.sender];
         if (amount == 0) revert InvalidAmount();
         if (a.principal < amount) revert InsufficientPrincipal();
+
+        _consumeWithdrawalCap(msg.sender, amount);
+        _consumeMaturedPrincipal(msg.sender, amount);
 
         a.principal -= amount;
         totalPrincipal -= amount;
@@ -160,7 +192,90 @@ contract NexoraProfitVault is AccessControl, Pausable, ReentrancyGuard {
         }
 
         asset.safeTransfer(msg.sender, amount);
+        emit WithdrawalPolicy(msg.sender, amount, 0);
         emit PrincipalWithdrawn(msg.sender, amount);
+    }
+
+    /**
+     * Move already funded, credited rewards into a NEW 90-day principal
+     * tranche (no ERC20 transfer and no fee). This does not increase
+     * externalDepositBasis or the maximum 20% withdrawal allowance.
+     */
+    function reinvestRewards(uint256 amount) external whenNotPaused nonReentrant {
+        Account storage a = _accounts[msg.sender];
+        if (!a.everDeposited || amount == 0 || amount > a.baseRewards + a.referralRewards) {
+            revert InvalidAmount();
+        }
+        if (a.principal + amount > MAX_PERSONAL_CAPITAL) revert ExceedsCapitalLimit();
+
+        uint256 baseConsumed = a.baseRewards < amount ? a.baseRewards : amount;
+        a.baseRewards -= baseConsumed;
+        a.referralRewards -= (amount - baseConsumed);
+        totalClaimableRewards -= amount;
+
+        if (a.countedInParent) {
+            a.countedInParent = false;
+            --_accounts[a.referrer].activeDirects;
+            emit DirectSynced(msg.sender, a.referrer, false);
+        }
+        a.principal += amount;
+        totalPrincipal += amount;
+        a.lastDepositAt = block.timestamp;
+        uint64 unlockAt = uint64(block.timestamp + WITHDRAWAL_LOCK);
+        _principalTranches[msg.sender].push(PrincipalTranche(amount, unlockAt));
+        _updateTeamVolume(msg.sender, amount, true);
+        emit Reinvested(msg.sender, amount, unlockAt);
+    }
+
+    function remainingWithdrawalCap(address user) public view returns (uint256) {
+        uint256 limit = externalDepositBasis[user] * MAX_WITHDRAWAL_BPS / BPS;
+        WithdrawalWindow storage w = withdrawalWindows[user];
+        if (w.startedAt == 0 || block.timestamp >= uint256(w.startedAt) + WITHDRAWAL_WINDOW) {
+            return limit;
+        }
+        return w.spentGross >= limit ? 0 : limit - w.spentGross;
+    }
+
+    function principalTrancheCount(address user) external view returns (uint256) {
+        return _principalTranches[user].length;
+    }
+
+    function principalTrancheAt(address user, uint256 i)
+        external view returns (uint256 remaining, uint64 unlockAt)
+    {
+        PrincipalTranche storage t = _principalTranches[user][i];
+        return (t.remaining, t.unlockAt);
+    }
+
+    function _consumeWithdrawalCap(address user, uint256 amount) private {
+        WithdrawalWindow storage w = withdrawalWindows[user];
+        if (amount > remainingWithdrawalCap(user)) revert WithdrawalLimitExceeded();
+        if (w.startedAt == 0 || block.timestamp >= uint256(w.startedAt) + WITHDRAWAL_WINDOW) {
+            w.startedAt = uint64(block.timestamp);
+            w.spentGross = 0;
+        }
+        w.spentGross += amount;
+        emit WithdrawalWindowUsed(user, amount, w.startedAt);
+    }
+
+    function _consumeMaturedPrincipal(address user, uint256 amount) private {
+        PrincipalTranche[] storage list = _principalTranches[user];
+        uint256 i = _nextTranche[user];
+        uint256 needed = amount;
+
+        // Tranches are added with monotonically increasing unlock times,
+        // so it is safe to stop at the first immature tranche.
+        while (needed != 0 && i < list.length) {
+            PrincipalTranche storage t = list[i];
+            if (block.timestamp < t.unlockAt) break;
+            uint256 used = t.remaining < needed ? t.remaining : needed;
+            t.remaining -= used;
+            needed -= used;
+            if (t.remaining != 0) break;
+            ++i;
+        }
+        if (needed != 0) revert NoMaturedTranche();
+        _nextTranche[user] = i;
     }
 
     /**
@@ -245,15 +360,29 @@ contract NexoraProfitVault is AccessControl, Pausable, ReentrancyGuard {
         emit RewardAllocated(member, reportId, amount, cost - amount, rate);
     }
 
-    /** Anyone may claim their own fully-funded base/referral rewards. */
+    /**
+     * Claim backed reward only AFTER 90 days from the account's first
+     * external deposit. Claims share the same 20% withdrawal cap window.
+     * If claimable rewards exceed remaining capacity, only the permitted
+     * portion is claimed; the rest remains safely credited and backed.
+     */
     function claimRewards() external nonReentrant returns (uint256 amount) {
         Account storage a = _accounts[msg.sender];
-        amount = a.baseRewards + a.referralRewards;
-        if (amount == 0) revert InvalidAmount();
-        a.baseRewards = 0;
-        a.referralRewards = 0;
+        if (!a.everDeposited || block.timestamp < a.firstDepositAt + WITHDRAWAL_LOCK) {
+            revert NotMature();
+        }
+        uint256 available = a.baseRewards + a.referralRewards;
+        if (available == 0) revert InvalidAmount();
+        uint256 limit = remainingWithdrawalCap(msg.sender);
+        if (limit == 0) revert WithdrawalLimitExceeded();
+        amount = available < limit ? available : limit;
+        _consumeWithdrawalCap(msg.sender, amount);
+        uint256 baseConsumed = a.baseRewards < amount ? a.baseRewards : amount;
+        a.baseRewards -= baseConsumed;
+        a.referralRewards -= (amount - baseConsumed);
         totalClaimableRewards -= amount;
         asset.safeTransfer(msg.sender, amount);
+        emit WithdrawalPolicy(msg.sender, amount, 0);
         emit RewardClaimed(msg.sender, amount);
     }
 
@@ -330,7 +459,7 @@ contract NexoraProfitVault is AccessControl, Pausable, ReentrancyGuard {
             totalPrincipal + unallocatedRewards + totalClaimableRewards;
     }
 
-    // Pause blocks new deposits and allocations, NOT users' withdrawals/claims.
+    // Pause blocks new deposits/allocations/reinvests, NOT matured withdrawals/claims.
     function pause() external onlyRole(GUARDIAN_ROLE) { _pause(); }
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) { _unpause(); }
 }

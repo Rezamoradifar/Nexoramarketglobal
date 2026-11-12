@@ -6,10 +6,10 @@ pragma solidity ^0.8.24;
  * @notice TESTNET PROTOTYPE (NOT AUDITED OR DEPLOYED).
  *
  * Routes only newly transferred, independently funded business revenue:
- *   76% -> NexoraProfitVault unallocated user-reward reserve.
- *   24% -> NexoraRevenueSplitter: 10% gross owner, 1.4% gross for each of ten company wallets.
- *   IMPORTANT: owner retains previously specified 10% gross share, while
- *   ten corporate wallets have now been increased to 1.4% each.
+ *   80% -> NexoraProfitVault unallocated reward reserve (revenue-only route).
+ *   20% -> NexoraRevenueSplitter: 6% owner, 1.4% each of ten company wallets.
+ *   CAUTION: user now proposes a separate, transparent 20% fee on deposits
+ *   and reinvestment; this legacy revenue router does NOT process deposits.
  *
  * IMPORTANT: Never route user principal through this module. A user deposit
  * goes directly to NexoraProfitVault.deposit and remains 100% withdrawable.
@@ -30,8 +30,8 @@ contract NexoraRevenueRouter is AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant BPS = 10_000;
-    uint256 public constant VAULT_BPS = 7_600;
-    uint256 public constant WALLETS_BPS = 2_400;
+    uint256 public constant VAULT_BPS = 8_000;
+    uint256 public constant WALLETS_BPS = 2_000;
 
     bytes32 public constant REVENUE_FUNDER_ROLE = keccak256("REVENUE_FUNDER_ROLE");
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
@@ -120,14 +120,14 @@ contract NexoraRevenueRouter is AccessControl, Pausable, ReentrancyGuard {
         // Checked before cross-contract calls; any downstream failure reverts it.
         usedEvidenceIds[evidenceId] = true;
 
-        // Explicitly account 76% inside the reward-reserve vault.
+        // Explicitly account 80% inside the reward-reserve vault.
         asset.forceApprove(address(vault), vaultPart);
         vault.fundRewards(vaultPart);
         asset.forceApprove(address(vault), 0);
 
-        // Only 24% enters the 11-wallet splitter. Fixed splitter ratios:
-        // 50/120 of that pool to owner (=10% gross), 7/120 to each
-        // company wallet (=1.4% gross).
+        // Only 20% enters the 11-wallet splitter. Fixed splitter ratio:
+        // 30% of recipient pool to owner (=6% gross); 7% to each
+        // company wallet (=1.4% gross). No depositor principal via router.
         asset.forceApprove(address(splitter), walletPart);
         splitter.fundDistribution(walletPart, evidenceId);
         asset.forceApprove(address(splitter), 0);

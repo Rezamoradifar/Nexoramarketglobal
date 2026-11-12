@@ -8,14 +8,17 @@ EXPECTED_PREVIEW_PORT=3080
 fail(){ printf 'NEXORA_UI_ERROR: %s\n' "$*" >&2; exit 1; }
 [[ "$EUID" -eq 0 ]] || fail 'Run as root on the Nexora VPS'
 [[ -L "$APP/current" ]] || fail 'Current Nexora release symlink is missing; do not overwrite unrelated services'
-for tool in git npm node curl nginx systemctl; do command -v "$tool" >/dev/null || fail "Missing $tool"; done
+for tool in git curl nginx systemctl; do command -v "$tool" >/dev/null || fail "Missing $tool"; done
 
 # Reuse the previously installed, isolated Node toolchain if present.
 for bin in "$APP"/toolchain/node-v22.*-linux-*/bin; do
   [[ -x "$bin/node" ]] && [[ -x "$bin/npm" ]] && export PATH="$bin:$PATH" && break
 done
+for tool in node npm; do command -v "$tool" >/dev/null || fail "Missing $tool"; done
 nginx -t || fail 'Nginx config is invalid; leaving everything unchanged'
-nginx -T 2>/dev/null | grep -Fq 'root /opt/nexora-markets/current/dist;' || fail 'Nginx does not point at Nexora release directory; refusing a potentially invisible deploy'
+NGINX_TEXT="$(nginx -T 2>/dev/null)" || fail 'Failed to inspect Nginx config'
+[[ "$NGINX_TEXT" == *'root /opt/nexora-markets/current/dist;'* ]] || fail 'Nginx does not point at Nexora release directory; refusing an invisible deploy'
+unset NGINX_TEXT
 mkdir -p "$APP/releases"
 STAMP="$(date -u +%Y%m%d%H%M%S)-$$"
 RELEASE="$APP/releases/ui-$STAMP"

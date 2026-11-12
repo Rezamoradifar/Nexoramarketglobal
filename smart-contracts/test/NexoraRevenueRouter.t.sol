@@ -27,8 +27,8 @@ contract NexoraRevenueRouterTest {
         vm.warp(100 days);
         token = new MockUSDT();
         vault = new NexoraProfitVault(address(token), address(this), address(this), address(this));
-        // The 24% pool goes 50/120 to the owner and 7/120 to each company wallet.
-        // Gross: 76% reserve, 10% owner and 1.4% for each of 10 companies.
+        // The 20% pool goes 30/100 owner, 7/100 to each company.
+        // Gross: 80% reserve, 6% owner, 1.4% each company.
         wallets[0] = address(0x100);
         for (uint256 i = 1; i < 11; ++i) {
             wallets[i] = address(uint160(0x100 + i));
@@ -63,22 +63,22 @@ contract NexoraRevenueRouterTest {
         require(!ok, "Expected revert");
     }
 
-    function testSeventySixPercentVaultTenOwnerFourteenCompanies() public {
+    function testEightyPercentVaultSixOwnerFourteenCompanies() public {
         router.fundAndRoute(1_000 * U, bytes32(uint256(1)));
-        _eq(vault.unallocatedRewards(), 760 * U);
+        _eq(vault.unallocatedRewards(), 800 * U);
         _eq(vault.totalPrincipal(), 0);
-        _eq(splitter.totalClaimable(), 240 * U);
-        _eq(token.balanceOf(address(vault)), 760 * U);
-        _eq(token.balanceOf(address(splitter)), 240 * U);
+        _eq(splitter.totalClaimable(), 200 * U);
+        _eq(token.balanceOf(address(vault)), 800 * U);
+        _eq(token.balanceOf(address(splitter)), 200 * U);
         _eq(token.balanceOf(address(router)), 0);
-        _eq(splitter.claimable(wallets[0]), 100 * U);
+        _eq(splitter.claimable(wallets[0]), 60 * U);
         for (uint256 i = 1; i < 11; ++i) {
             _eq(splitter.claimable(wallets[i]), 14 * U);
         }
         require(vault.isSolvent() && splitter.isSolvent(), "Both destinations solvent");
         _eq(router.totalRevenueFunded(), 1_000 * U);
-        _eq(router.totalVaultReservesFunded(), 760 * U);
-        _eq(router.totalWalletPoolFunded(), 240 * U);
+        _eq(router.totalVaultReservesFunded(), 800 * U);
+        _eq(router.totalWalletPoolFunded(), 200 * U);
     }
 
     function testUserDepositRemainsOneHundredPercentInVault() public {
@@ -90,10 +90,10 @@ contract NexoraRevenueRouterTest {
         _eq(splitter.totalClaimable(), 0);
 
         router.fundAndRoute(1_000 * U, bytes32(uint256(2)));
-        _eq(token.balanceOf(address(vault)), 860 * U);
+        _eq(token.balanceOf(address(vault)), 900 * U);
         _eq(vault.totalPrincipal(), 100 * U);
-        _eq(vault.unallocatedRewards(), 760 * U);
-        _eq(splitter.totalClaimable(), 240 * U);
+        _eq(vault.unallocatedRewards(), 800 * U);
+        _eq(splitter.totalClaimable(), 200 * U);
         uint256 balanceBefore = token.balanceOf(ALICE);
         vm.warp(block.timestamp + 90 days);
         for (uint256 i; i < 5; ++i) {
@@ -103,7 +103,7 @@ contract NexoraRevenueRouterTest {
         }
         _eq(token.balanceOf(ALICE), balanceBefore + 100 * U);
         _eq(vault.totalPrincipal(), 0);
-        _eq(token.balanceOf(address(vault)), 760 * U);
+        _eq(token.balanceOf(address(vault)), 800 * U);
         require(vault.isSolvent(), "Full principal was protected");
     }
 
@@ -139,8 +139,8 @@ contract NexoraRevenueRouterTest {
         _expectRouterRevert(abi.encodeCall(
             NexoraRevenueRouter.fundAndRoute, (100 * U, bytes32(uint256(5)))
         ));
-        _eq(vault.unallocatedRewards(), 76 * U);
-        _eq(splitter.totalClaimable(), 24 * U);
+        _eq(vault.unallocatedRewards(), 80 * U);
+        _eq(splitter.totalClaimable(), 20 * U);
     }
 
     function testEmergencyPauseStopsNewRoutingButNotExistingClaims() public {
@@ -151,7 +151,7 @@ contract NexoraRevenueRouterTest {
         ));
         vm.prank(wallets[0]);
         splitter.claim();
-        _eq(token.balanceOf(wallets[0]), 10 * U);
+        _eq(token.balanceOf(wallets[0]), 6 * U);
         require(vault.isSolvent() && splitter.isSolvent(), "Reserve remains backed");
     }
 
@@ -164,9 +164,8 @@ contract NexoraRevenueRouterTest {
         _eq(vault.unallocatedRewards(), expectedVault);
         _eq(splitter.totalClaimable(), expectedWallets);
         _eq(token.balanceOf(address(router)), 0);
-        // Each corporate wallet receives 7/120 of the 24% sub-pool;
-        // this equals 1.4% of the original revenue (modulo token-unit rounding).
-        uint256 partner = expectedWallets * 7 / 120;
+        // Each company receives 7/100 of the 20% pool = 1.4% of gross.
+        uint256 partner = expectedWallets * 7 / 100;
         uint256 totalPartner;
         for (uint256 i = 1; i < 11; ++i) {
             _eq(splitter.claimable(wallets[i]), partner);
@@ -179,8 +178,8 @@ contract NexoraRevenueRouterTest {
     function testMultipleReportsAccumulate80And20WithoutLeaks() public {
         router.fundAndRoute(250 * U, bytes32(uint256(8)));
         router.fundAndRoute(750 * U, bytes32(uint256(9)));
-        _eq(vault.unallocatedRewards(), 760 * U);
-        _eq(splitter.totalClaimable(), 240 * U);
+        _eq(vault.unallocatedRewards(), 800 * U);
+        _eq(splitter.totalClaimable(), 200 * U);
         _eq(router.totalRevenueFunded(), 1_000 * U);
         require(vault.isSolvent() && splitter.isSolvent(), "Funded");
     }

@@ -4,7 +4,7 @@
 
 ## Purpose and threat model
 
-This contract holds principal as a liability to each individual depositor. Principal is not lendable or withdrawable by the administrator. A different, role-restricted wallet can **fund a rewards pool**, then a role-restricted allocator can credit fully backed amounts using an externally reviewable \`reportId\`. There is **no internal trading bot or proof of realized trading profits**. On-chain funding alone cannot establish that funds came from actual profitable trading.
+This contract holds principal as a liability to each individual depositor. Principal is not lendable or withdrawable by the administrator. A different, role-restricted wallet can **fund a rewards pool**, then a role-restricted allocator can credit fully backed amounts using an externally reviewable `reportId`. There is **no internal trading bot or proof of realized trading profits**. On-chain funding alone cannot establish that funds came from actual profitable trading.
 
 The administrator can manage FUNDING, ALLOCATION and GUARDIAN roles, so it is a **trusted-operator system**, NOT fully decentralized. Only a public audit trail and independent controls on the operator's real strategy can substantiate claimed profits.
 
@@ -20,7 +20,7 @@ The administrator can manage FUNDING, ALLOCATION and GUARDIAN roles, so it is a 
 
 * Only personal deposits between 10 and 50,000 USDT are accepted.
 * Any top-up resets the user's 24h maturity and any direct-member qualification already counted for them.
-* To count as an active direct member, a direct referral must hold at least 100 USDT for 24h. Anyone may call \`syncDirect(member)\` to register eligibility. There is **no keeper built into the contract**.
+* To count as an active direct member, a direct referral must hold at least 100 USDT for 24h. Anyone may call `syncDirect(member)` to register eligibility. There is **no keeper built into the contract**.
 * Volume means active principal of descendants at depths 1–3 (withdrawals reduce it immediately). The largest direct branch must account for **no more than 50%** of the volume for VIP 02–05. Each wallet can register at most 128 direct children to bound gas usage.
 * Higher tiers use current on-chain conditions. Team volume is not separately 24h-matured; only personal balance and counted direct members are. A sybil-resistant identity policy and oracle may be needed before production.
 * An authorized allocator may issue **at most one amount every 24h** to a member. That amount may be **zero**, and missed periods do not accrue automatically.
@@ -34,33 +34,33 @@ The administrator can manage FUNDING, ALLOCATION and GUARDIAN roles, so it is a 
 
 Foundry (forge) and Node 22:
 
-\`\`\`bash
+```bash
 cd smart-contracts
 npm install --no-audit --no-fund
 forge build
 forge test -vv
-\`\`\`
+```
 
-The repository's \`contract-tests.yml\` workflow checks compilation and tests independently.
+The repository's `contract-tests.yml` workflow checks compilation and tests independently.
 
 ## Network
 
-**BNB Smart Chain testnet:** chain ID \`97\`, deploy only with your own newly deployed mock stablecoin to begin.
+**BNB Smart Chain testnet:** chain ID `97`, deploy only with your own newly deployed mock stablecoin to begin.
 
-**BNB Smart Chain mainnet:** chain ID \`56\`, commonly used Binance-Peg BSC-USD/Binance-Peg USDT token is \`0x55d398326f99059fF775485246999027B3197955\`, **18 decimals**. It is **not native Ethereum USDT issued directly by Tether**. Independently verify address and token custody before deployment. No address for the vault has been deployed.
+**BNB Smart Chain mainnet:** chain ID `56`, commonly used Binance-Peg BSC-USD/Binance-Peg USDT token is `0x55d398326f99059fF775485246999027B3197955`, **18 decimals**. It is **not native Ethereum USDT issued directly by Tether**. Independently verify address and token custody before deployment. No address for the vault has been deployed.
 
 Constructor parameters:
 
-\`\`\`
+```
 NexoraProfitVault(
   address token,          // test token or independently verified BSC token
   address adminMultisig,  // multisig, not the deployer key
   address rewardsFunder,  // distinct wallet, non-user capital
   address rewardsAllocator
 )
-\`\`\`
+```
 
-Only the **admin** has \`DEFAULT_ADMIN_ROLE\` (and can grant/revoke roles). The admin also initially has \`GUARDIAN_ROLE\`. \`FUNDER_ROLE\` and \`ALLOCATOR_ROLE\` are independent. Deploy with independent monitored keys and an externally published report policy.
+Only the **admin** has `DEFAULT_ADMIN_ROLE` (and can grant/revoke roles). The admin also initially has `GUARDIAN_ROLE`. `FUNDER_ROLE` and `ALLOCATOR_ROLE` are independent. Deploy with independent monitored keys and an externally published report policy.
 
 ## Must complete before any mainnet use
 

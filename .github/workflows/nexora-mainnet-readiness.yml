@@ -38,4 +38,4 @@ jobs:
       - name: Test all invariants
         run: forge test -vv
       - name: Validate read-only preflight syntax
-        run: bash -n preflight-mainnet.sh
+        run: bash -n preflight-mainnet.sh postdeploy-readonly.sh

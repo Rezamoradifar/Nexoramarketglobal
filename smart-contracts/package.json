@@ -1,0 +1,9 @@
+{
+  "name": "nexora-profit-vault-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Un-audited prototype of funded-only reward vault on BNB Chain",
+  "dependencies": {
+    "@openzeppelin/contracts": "5.7.0"
+  }
+}

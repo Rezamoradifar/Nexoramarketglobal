@@ -1,0 +1,64 @@
+name: Nexora public reachability
+on:
+  push:
+    paths:
+      - .github/workflows/check-public-site.yml
+  workflow_dispatch:
+
+jobs:
+  dns:
+    name: DNS apex and www
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check public IPv4 resolution
+        run: |
+          set -euo pipefail
+          for host in nexoramarketglobal.live www.nexoramarketglobal.live; do
+            echo "--- $host ---"
+            getent ahostsv4 "$host" | awk '{print $1}' | sort -u
+            getent ahostsv4 "$host" | awk '{print $1}' | grep -Fxq 103.244.227.112
+          done
+  http-apex:
+    name: HTTP apex contains Nexora
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify public HTTP website
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --max-time 30 --connect-timeout 12 \
+            --output /tmp/nexora.html --write-out 'HTTP status: %{http_code}, destination: %{url_effective}\n' \
+            http://nexoramarketglobal.live/
+          grep -Fq 'id="root"' /tmp/nexora.html
+  https-apex:
+    name: HTTPS apex contains Nexora
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify HTTPS and certificate trust
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --max-time 30 --connect-timeout 12 \
+            --output /tmp/nexora.html --write-out 'HTTPS status: %{http_code}, destination: %{url_effective}\n' \
+            https://nexoramarketglobal.live/
+          grep -Fq 'id="root"' /tmp/nexora.html
+  http-www:
+    name: HTTP www contains Nexora
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify www HTTP
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --max-time 30 --connect-timeout 12 \
+            --output /tmp/nexora.html --write-out 'HTTP status: %{http_code}, destination: %{url_effective}\n' \
+            http://www.nexoramarketglobal.live/
+          grep -Fq 'id="root"' /tmp/nexora.html
+  https-www:
+    name: HTTPS www contains Nexora
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify www HTTPS and certificate trust
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --max-time 30 --connect-timeout 12 \
+            --output /tmp/nexora.html --write-out 'HTTPS status: %{http_code}, destination: %{url_effective}\n' \
+            https://www.nexoramarketglobal.live/
+          grep -Fq 'id="root"' /tmp/nexora.html

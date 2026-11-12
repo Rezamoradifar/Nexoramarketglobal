@@ -7,7 +7,7 @@ pragma solidity ^0.8.24;
  *
  * Routes only newly transferred, independently funded business revenue:
  *   80% -> NexoraProfitVault unallocated user-reward reserve.
- *   20% -> NexoraRevenueSplitter for owner + ten beneficiary wallets.
+ *   20% -> NexoraRevenueSplitter: 10% gross for owner, 1% gross for each of ten partners.
  *
  * IMPORTANT: Never route user principal through this module. A user deposit
  * goes directly to NexoraProfitVault.deposit and remains 100% withdrawable.
@@ -123,8 +123,8 @@ contract NexoraRevenueRouter is AccessControl, Pausable, ReentrancyGuard {
         vault.fundRewards(vaultPart);
         asset.forceApprove(address(vault), 0);
 
-        // Only 20% enters the 11-wallet splitter; its own configured BPS
-        // determine how this 20% is shared among owner and ten wallets.
+        // Only 20% enters the 11-wallet splitter. Fixed splitter ratios:
+        // 50% of that pool to owner (=10% gross), 5% to each partner (=1% gross).
         asset.forceApprove(address(splitter), walletPart);
         splitter.fundDistribution(walletPart, evidenceId);
         asset.forceApprove(address(splitter), 0);

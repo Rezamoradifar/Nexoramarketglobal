@@ -103,3 +103,15 @@ User wallets do not need private keys shared in chat. Only their public wallet a
 ### Economics still to decide
 
 The percentages are fixed: **80% vault / 10% owner / 1% for each of ten partners**. Before deploying, establish (a) the externally verified net distributable business revenue definition, (b) all 11 public payout addresses, (c) trustworthy multisig roles, and (d) any reserve retained **before** revenue enters this router. Never assume token funding proves realized profits.
+
+## Mainnet preparation package (NOT a release)
+
+A new **draft branch** carries the fail-closed BSC mainnet technical preparation:
+
+- [Mainnet release checklist](./MAINNET-RELEASE-CHECKLIST.md) — all mandatory security, operational, testnet, legal and funding gates.
+- [Atomic deployment factory](./src/NexoraSystemFactory.sol) — deploys the vault, splitter and router together and relinquishes temporary installer permissions.
+- [Read-only mainnet technical preflight](./preflight-mainnet.sh) — validates chain ID 56, token contract and decimals, governance contract code, and beneficiary wallet uniqueness.
+- [Read-only postdeployment verifier](./postdeploy-readonly.sh) — checks token/destination/role/solvency invariants after a *future independently authorized* deployment.
+- [Environment example](./.env.example) — contains only blank public address fields, no private keys.
+
+**These tools neither deploy nor prove a real investment strategy makes profits.** The smart-contract code is unaudited, the actual 11 beneficiary addresses and multisig admin are unknown, no live BNB testnet dress rehearsal is recorded, and the website does not yet have an independently verified wallet-integrated financial backend. Until every gate passes, keep financial operations OFF.

@@ -6,10 +6,12 @@ pragma solidity ^0.8.24;
  * @notice Un-audited TESTNET prototype for one owner wallet + ten other wallets.
  * @dev Accepts only separately funded ERC20 distributions, NEVER user principal.
  *
- * The split configuration is immutable and must be reviewed at deployment:
- * - payoutWallets[0] is the owner wallet
- * - payoutWallets[1..10] are the ten other recipients
- * - sharesBps total 10,000 (100%) and each recipient must have a positive share
+ * Payout percentages are FIXED BY CODE (only addresses are constructor inputs):
+ * - payoutWallets[0] gets 50% of this splitter's 20% revenue pool
+ *   = 10% of gross routed revenue.
+ * - payoutWallets[1..10] each gets 5% of the 20% pool
+ *   = 1% of gross routed revenue each.
+ * - Together these recipients receive only the router's 20% pool.
  *
  * This contract cannot verify that deposited distribution tokens represent
  * realized *net profit*. Real business accounting/audit is off-chain.
@@ -27,6 +29,8 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
 
     uint256 public constant RECIPIENT_COUNT = 11;
     uint256 public constant BPS = 10_000;
+    uint16 public constant OWNER_POOL_BPS = 5_000;
+    uint16 public constant PARTNER_POOL_BPS = 500;
     bytes32 public constant FUNDER_ROLE = keccak256("FUNDER_ROLE");
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
 
@@ -58,7 +62,6 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
     error ZeroAddress();
     error InvalidAsset();
     error DuplicateWallet();
-    error InvalidShares();
     error InvalidAmount();
     error DuplicateOrMissingEvidence();
     error FeeOnTransferNotSupported();
@@ -68,8 +71,7 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
         address token_,
         address admin_,
         address funder_,
-        address[11] memory wallets_,
-        uint16[11] memory bps_
+        address[11] memory wallets_
     ) {
         if (token_ == address(0) || admin_ == address(0) || funder_ == address(0)) {
             revert ZeroAddress();
@@ -78,18 +80,14 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
             revert InvalidAsset();
         }
 
-        uint256 total;
         for (uint256 i; i < RECIPIENT_COUNT; ++i) {
             if (wallets_[i] == address(0)) revert ZeroAddress();
-            if (bps_[i] == 0) revert InvalidShares();
             for (uint256 j; j < i; ++j) {
                 if (wallets_[i] == wallets_[j]) revert DuplicateWallet();
             }
-            total += bps_[i];
             payoutWallets[i] = wallets_[i];
-            sharesBps[i] = bps_[i];
+            sharesBps[i] = i == 0 ? OWNER_POOL_BPS : PARTNER_POOL_BPS;
         }
-        if (total != BPS) revert InvalidShares();
 
         asset = IERC20(token_);
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
@@ -98,7 +96,7 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @notice Explicitly fund a new distribution. The funer's 11 payouts
+     * @notice Explicitly fund a new distribution. The funder's 11 payouts
      * are fully backed by newly transferred stablecoins.
      * @dev Authorized funding does not prove net profit, hence evidenceId
      * must identify independently reviewable accounting documentation.

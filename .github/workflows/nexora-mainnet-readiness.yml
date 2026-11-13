@@ -8,6 +8,7 @@ on:
       - feature/nexora-v2-security-markets-20261113
       - feature/nexora-fully-backed-gross-credit-20261113
       - feature/nexora-transparent-gross-net-ui-20261113
+      - feature/nexora-beneficiary-wallets-20261114
     paths:
       - 'smart-contracts/**'
       - '.github/workflows/nexora-mainnet-readiness.yml'
@@ -39,6 +40,8 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Build Solidity
         run: forge build --sizes
+      - name: Validate beneficiary wallet registry (no RPC)
+        run: python3 scripts/check-beneficiary-config.py
       - name: Test all invariants
         run: forge test -vv
       - name: Validate read-only preflight syntax

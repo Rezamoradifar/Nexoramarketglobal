@@ -1,5 +1,7 @@
 # Nexora account display: full GROSS deposit record, transparent NET principal
 
+> **Historical design snapshot:** the separate `NexoraModel2Vault` now implements a testnet-only prototype. Earlier statements in this document that the model is preview-only apply to the older `NexoraProfitVault`. It remains unaudited, unverified on public testnet and unavailable for real deposits; see the current [README](./README.md).
+
 **DRAFT — not deployed, not merged, not connected to any live financial account.**
 
 ## Latest requested interpretation

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import './Model2Preview.css';
+import { isConfiguredAddress, readModel2Account, sendModel2TestnetAction } from './model2Wallet.js';
 
-// This module is TESTNET-ONLY and read-only, pending independent audit.
+// The optional transaction panel is testnet-only and remains unpublished.
 const vaultAddress = (import.meta.env.VITE_NEXORA_MODEL2_TESTNET_VAULT || '').trim();
-const deployedAddressConfigured = /^0x[0-9a-fA-F]{40}$/.test(vaultAddress);
-const SNAPSHOT_SELECTOR = '0x014a296f'; // cast sig 'accountSnapshot(address)'
+const tokenAddress = (import.meta.env.VITE_NEXORA_MODEL2_TESTNET_TOKEN || '').trim();
+const deployedAddressConfigured = isConfiguredAddress(vaultAddress) && isConfiguredAddress(tokenAddress);
 const TOKEN_UNIT = 10n ** 18n;
 const TIERS = [
   { name:'VIP 1', bps:100, needs:'Minimum 10 USDT gross capital' },
@@ -19,21 +20,35 @@ function displayToken(raw){
   const cents=((raw%TOKEN_UNIT)*100n/TOKEN_UNIT).toString().padStart(2,'0');
   return whole.toLocaleString('en-US')+'.'+cents;
 }
-function parseSnapshot(hex){
-  if(!/^0x(?:[0-9a-fA-F]{64}){5}$/.test(hex))
-    throw new Error('Invalid account data returned by the configured testnet contract.');
-  return hex.slice(2).match(/.{64}/g).map(x=>BigInt('0x'+x));
-}
-
 export default function Model2Preview(){
   const [grossInput,setGrossInput]=useState('1000');
   const [tierNumber,setTierNumber]=useState(0);
   const [wallet,setWallet]=useState({status:'idle',message:'',account:'',snapshot:null});
+  const [depositAmount,setDepositAmount]=useState('');
+  const [referrer,setReferrer]=useState('');
+  const [reinvestAmount,setReinvestAmount]=useState('');
+  const [withdrawAmount,setWithdrawAmount]=useState('');
+  const [transaction,setTransaction]=useState({busy:false,hash:'',message:''});
   const selected=TIERS[tierNumber];
   const num=Number(grossInput);
   const gross=Number.isFinite(num)?Math.max(0,Math.min(50000,num)):0;
   const net=gross*.8, owner=gross*.06, each=gross*.014;
   const ceiling=gross*selected.bps/10000;
+
+  useEffect(()=>{
+    const provider=window.ethereum;
+    if(!provider?.on)return undefined;
+    const reset=()=>{
+      setWallet({status:'idle',message:'Wallet or network changed. Reconnect to continue.',account:'',snapshot:null});
+      setTransaction({busy:false,hash:'',message:''});
+    };
+    provider.on('accountsChanged',reset);
+    provider.on('chainChanged',reset);
+    return ()=>{
+      provider.removeListener?.('accountsChanged',reset);
+      provider.removeListener?.('chainChanged',reset);
+    };
+  },[]);
 
   async function readAccount(){
     if(!deployedAddressConfigured)return;
@@ -45,24 +60,46 @@ export default function Model2Preview(){
     try{
       const provider=window.ethereum;
       const chainId=await provider.request({method:'eth_chainId'});
-      if(Number.parseInt(chainId,16)!==97)
+      if(typeof chainId!=='string'||!/^0x[0-9a-f]+$/i.test(chainId)||BigInt(chainId)!==97n)
         throw new Error('Switch to BNB TESTNET (chain ID 97) in your wallet.');
       const accounts=await provider.request({method:'eth_requestAccounts'});
       const account=accounts?.[0];
       if(!/^0x[0-9a-fA-F]{40}$/.test(account||''))
         throw new Error('No valid public wallet address selected.');
-      const code=await provider.request({method:'eth_getCode',params:[vaultAddress,'latest']});
-      if(!code || code==='0x' || code==='0x0')
-        throw new Error('Configured address has no deployed contract on testnet.');
-      const param=account.slice(2).toLowerCase().padStart(64,'0');
-      const data=await provider.request({
-        method:'eth_call',
-        params:[{to:vaultAddress,data:SNAPSHOT_SELECTOR+param},'latest'],
-      });
-      const snapshot=parseSnapshot(data);
+      const {snapshot}=await readModel2Account(provider,vaultAddress,tokenAddress,account);
       setWallet({status:'success',message:'BNB Testnet data loaded. No transactions were sent.',account,snapshot});
     }catch(error){
       setWallet({status:'error',message:error?.message||'Testnet account read failed.',account:'',snapshot:null});
+    }
+  }
+
+  async function runAction(action,amount='',sponsor=''){
+    if(wallet.status!=='success'||transaction.busy)return;
+    setTransaction({busy:true,hash:'',message:'Confirm this testnet action in your wallet.'});
+    try{
+      const hash=await sendModel2TestnetAction(window.ethereum,
+        {vault:vaultAddress,token:tokenAddress,account:wallet.account},action,amount,sponsor);
+      setTransaction({busy:false,hash,message:'Submitted to BNB Testnet. Check confirmation before continuing.'});
+    }catch(error){
+      setTransaction({busy:false,hash:'',message:error?.message||'Testnet transaction was not submitted.'});
+    }
+  }
+
+  async function checkTransaction(){
+    if(!transaction.hash||transaction.busy)return;
+    const hash=transaction.hash;
+    setTransaction({busy:true,hash,message:'Checking transaction confirmation…'});
+    try{
+      const {account,snapshot}=await readModel2Account(window.ethereum,vaultAddress,tokenAddress,wallet.account);
+      const receipt=await window.ethereum.request({method:'eth_getTransactionReceipt',params:[hash]});
+      if(!receipt){setTransaction({busy:false,hash,message:'Still pending on BNB Testnet.'});return;}
+      if(typeof receipt.status!=='string'||BigInt(receipt.status)!==1n){
+        setTransaction({busy:false,hash,message:'Transaction failed on BNB Testnet.'});return;
+      }
+      setWallet({status:'success',message:'Testnet account refreshed.',account,snapshot});
+      setTransaction({busy:false,hash,message:'Confirmed on BNB Testnet.'});
+    }catch(error){
+      setTransaction({busy:false,hash,message:error?.message||'Could not check the transaction.'});
     }
   }
 
@@ -71,7 +108,7 @@ export default function Model2Preview(){
       <div>
         <span className="model2-kicker">NEXORA · MODEL 2 · AUDIT-PENDING TESTNET PREVIEW</span>
         <h2 id="model2-title">Your deposit history and your actual principal.</h2>
-        <p>Transparency by design: the full transaction remains in your deposit history, while the actual withdrawable principal is the net amount after the disclosed upfront allocation.</p>
+        <p>Transparency by design: the full transaction remains in your deposit history. Net principal is subject to the disclosed upfront allocation, maturity and withdrawal limits.</p>
       </div>
       <span className="model2-preview-status">Illustration · Not a live account</span>
     </div>
@@ -105,22 +142,23 @@ export default function Model2Preview(){
         <div className="model2-side-card">
           <h3>Withdrawal &amp; Reinvest terms</h3>
           <dl>
-            <div><dt>Lock</dt><dd>90 days per tranche</dd></div>
+            <div><dt>Principal lock</dt><dd>90 days per deposit or reinvest tranche</dd></div>
+            <div><dt>Reward claims</dt><dd>90 days from first deposit</dd></div>
             <div><dt>Daily withdrawal cap</dt><dd>20% gross external deposits</dd></div>
             <div><dt>Withdrawal fee</dt><dd>0%</dd></div>
             <div><dt>Reinvest</dt><dd>80% net principal / 20% upfront allocation</dd></div>
           </dl>
-          <p>Daily limits never create funds beyond mature, actually backed balances.</p>
+          <p>Principal and reward claims share the 24-hour limit. Reinvest does not increase the limit, and credited rewards require a funded reserve.</p>
         </div>
       </div>
     </div>
     <div className="model2-testnet">
       <div>
-        <h3>Read-only wallet viewer · BNB TESTNET</h3>
-        <p>When a separately audited testnet contract address is configured, you may choose to share a public wallet address to read actual testnet balances. No approvals, signatures or transfers.</p>
+        <h3>Test account · BNB TESTNET only</h3>
+        <p>This unpublished test panel uses NXTTEST, a token with no value. Each action requires a separate wallet confirmation. It cannot be used for real USDT or mainnet.</p>
       </div>
       <button type="button" disabled={!deployedAddressConfigured || wallet.status==='loading'} onClick={readAccount}>
-        {wallet.status==='loading'?'Reading…':deployedAddressConfigured?'Read my testnet account':'Awaiting testnet deployment'}
+        {wallet.status==='loading'?'Reading…':deployedAddressConfigured?'Connect & read test account':'Awaiting testnet deployment'}
       </button>
       {wallet.message&&<p role="status" className="model2-wallet-message">{wallet.message}</p>}
       {wallet.status==='success'&&wallet.snapshot&&
@@ -133,6 +171,42 @@ export default function Model2Preview(){
             ['Funded credited rewards',wallet.snapshot[3]],
             ['24h remaining withdrawal allowance',wallet.snapshot[4]],
           ].map(([label,value])=><div key={label}><span>{label}</span><strong>{displayToken(value)} test tokens</strong></div>)}
+          <p>The remaining limit is not a withdrawable balance. Maturity, funded balances and other contract rules still apply.</p>
+        </div>}
+      {wallet.status==='success'&&wallet.snapshot&&
+        <div className="model2-actions">
+          <div className="model2-actions-heading"><h3>Practice with test tokens</h3><span>Chain 97 · NXTTEST only</span></div>
+          <p>Deposits and reinvestment allocate 20% upfront; 80% becomes net principal. The full gross amount is a plan reference, not a withdrawable balance.</p>
+          <div className="model2-action-grid">
+            <div className="model2-action-card">
+              <label htmlFor="test-deposit">Test deposit amount</label>
+              <input id="test-deposit" inputMode="decimal" value={depositAmount} onChange={e=>setDepositAmount(e.target.value)} placeholder="e.g. 1000"/>
+              <label htmlFor="test-referrer">Referrer address · optional on first deposit</label>
+              <input id="test-referrer" value={referrer} onChange={e=>setReferrer(e.target.value)} placeholder="0x…" autoComplete="off"/>
+              <div className="model2-action-buttons">
+                <button disabled={transaction.busy} onClick={()=>runAction('approve',depositAmount)}>1. Approve exact amount</button>
+                <button disabled={transaction.busy} onClick={()=>runAction('deposit',depositAmount,referrer)}>2. Deposit</button>
+              </div>
+              <p>Wait for the approval transaction to confirm before depositing.</p>
+            </div>
+            <div className="model2-action-card">
+              <label htmlFor="test-reinvest">Reinvest credited rewards</label>
+              <input id="test-reinvest" inputMode="decimal" value={reinvestAmount} onChange={e=>setReinvestAmount(e.target.value)} placeholder="Amount"/>
+              <button disabled={transaction.busy} onClick={()=>runAction('reinvest',reinvestAmount)}>Reinvest test rewards</button>
+              <p>A new 90-day principal lock and the 20% allocation apply.</p>
+            </div>
+            <div className="model2-action-card">
+              <label htmlFor="test-withdraw">Withdraw matured principal</label>
+              <input id="test-withdraw" inputMode="decimal" value={withdrawAmount} onChange={e=>setWithdrawAmount(e.target.value)} placeholder="Amount"/>
+              <div className="model2-action-buttons">
+                <button disabled={transaction.busy} onClick={()=>runAction('withdraw',withdrawAmount)}>Withdraw test principal</button>
+                <button disabled={transaction.busy} onClick={()=>runAction('claim')}>Claim test rewards</button>
+              </div>
+              <p>Principal and reward claims share the 24-hour limit and must meet their maturity rules.</p>
+            </div>
+          </div>
+          {transaction.message&&<p role="status" className="model2-transaction-message">{transaction.message}</p>}
+          {transaction.hash&&<div className="model2-transaction-link"><a href={`https://testnet.bscscan.com/tx/${transaction.hash}`} target="_blank" rel="noreferrer">View testnet transaction ↗</a><button disabled={transaction.busy} onClick={checkTransaction}>Check confirmation</button></div>}
         </div>}
     </div>
   </section>;

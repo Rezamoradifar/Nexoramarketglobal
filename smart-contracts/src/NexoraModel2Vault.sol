@@ -4,7 +4,12 @@ pragma solidity ^0.8.24;
 /**
  * Nexora Model 2 v0.1 - UN-AUDITED TESTNET PROTOTYPE.
  *
- * Records full GROSS paid-in history and conditional gross plan basis,\n * but holds ONLY 80% as NET withdrawable principal after a fully disclosed\n * 20% upfront allocation (6% owner, ten company wallets 1.4% each).\n * A separate already-funded rewards pool must pay every issued reward.\n * Never label the gross plan reference as protected or withdrawable principal.
+ * Records full GROSS paid-in history and conditional gross plan basis,
+ * but holds ONLY 80% as NET principal after a fully disclosed
+ * 20% upfront allocation (6% owner, ten company wallets 1.4% each).
+ * Principal is subject to maturity and withdrawal limits.
+ * A separate already-funded rewards pool must pay every issued reward.
+ * Never label the gross plan reference as protected or withdrawable principal.
  * Allocations are NOT automatic, guaranteed, or proofs of trading profit:
  * an authorized allocator must submit an independently reviewable report ID.
  * No strategy integrations, leverage, principal lending, or admin withdrawals.
@@ -21,6 +26,7 @@ import {NexoraRevenueSplitter} from "./NexoraRevenueSplitter.sol";
 contract NexoraModel2Vault is AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    uint256 public constant TESTNET_CHAIN_ID = 97;
     bytes32 public constant FUNDER_ROLE = keccak256("FUNDER_ROLE");
     bytes32 public constant ALLOCATOR_ROLE = keccak256("ALLOCATOR_ROLE");
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
@@ -73,7 +79,7 @@ contract NexoraModel2Vault is AccessControl, Pausable, ReentrancyGuard {
     mapping(address => uint256) public externalDepositBasis; // excludes Reinvest
     mapping(address => Account) private _accounts;
     mapping(address => address[]) private _children;
-    mapping(address => uint256) public teamVolume; // 3-level active principal
+    mapping(address => uint256) public teamVolume; // 3-level open gross plan basis, not net principal
     mapping(address => mapping(address => uint256)) public branchVolume;
     mapping(bytes32 => bool) public usedReportIds;
 
@@ -120,8 +126,10 @@ contract NexoraModel2Vault is AccessControl, Pausable, ReentrancyGuard {
     error WithdrawalLimitExceeded();
     error NoMaturedTranche();
     error IncorrectSplitter();
+    error TestnetOnly(uint256 actualChainId);
 
     constructor(address token_, address admin_, address funder_, address allocator_, address splitter_) {
+        if (block.chainid != TESTNET_CHAIN_ID) revert TestnetOnly(block.chainid);
         if (token_ == address(0) || admin_ == address(0) ||
             funder_ == address(0) || allocator_ == address(0)) revert ZeroAddress();
         if (token_.code.length == 0 || IERC20Metadata(token_).decimals() != 18) {
@@ -232,7 +240,9 @@ contract NexoraModel2Vault is AccessControl, Pausable, ReentrancyGuard {
 
     /**
      * Move already funded, credited rewards into a NEW 90-day principal
-     * tranche (no ERC20 transfer and no fee). This does not increase
+     * tranche. The disclosed 20% company allocation is transferred to the
+     * splitter and the remaining 80% is credited as net principal.
+     * This does not increase
      * externalDepositBasis or the maximum 20% withdrawal allowance.
      */
     function reinvestRewards(uint256 amount) external whenNotPaused nonReentrant {

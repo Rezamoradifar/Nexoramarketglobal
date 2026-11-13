@@ -45,6 +45,10 @@ jobs:
         run: python3 scripts/check-beneficiary-config.py
       - name: Run full Foundry suite with extended fuzzing (1024 cases per fuzz test)
         run: forge test -vv --fuzz-runs 1024
+      - name: Compute branch and line coverage for Solidity
+        run: forge coverage --report summary
+      - name: Check pinned dependency vulnerabilities (high and critical)
+        run: npm audit --omit=dev --audit-level=high
       - name: Validate read-only preflight syntax
         run: bash -n preflight-mainnet.sh postdeploy-readonly.sh
       - name: List blockers to mainnet (never broadcasts)

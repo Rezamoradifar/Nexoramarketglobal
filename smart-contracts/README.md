@@ -103,3 +103,13 @@ A new **draft branch** carries the fail-closed BSC mainnet technical preparation
 - [Environment example](./.env.example) — contains only blank public address fields, no private keys.
 
 **These tools neither deploy nor prove a real investment strategy makes profits.** The smart-contract code is unaudited, the actual 11 beneficiary addresses and multisig admin are unknown, no live BNB testnet dress rehearsal is recorded, and the website does not yet have an independently verified wallet-integrated financial backend. Until every gate passes, keep financial operations OFF.
+
+## Mainnet security stress test / current release decision (2026-11-14)
+
+Latest [mainnet security test report](./MAINNET-TEST-REPORT-2026-11-14.md) and [CI evidence](https://github.com/Rezamoradifar/Nexoramarketglobal/actions/runs/43521333972): **84 Foundry tests passed**, including wider fuzzing (1,024 random cases per fuzz test), hostile-token rejection, funded accounting, 24-hour withdrawal boundaries, actual 11-wallet ratios, governance and **read-only market-feed freshness/role checks**. `forge coverage` and `npm audit --audit-level=high` run in CI. No vulnerabilities were reported by npm at that threshold, but main Solidity branch coverage is **42.86%–87.50%** and independent security audit is still required.
+
+The `NexoraMarketOracleReader.sol` is only an independently configurable, **read-only** oracle interface; it neither places trades nor holds deposits. No live market feed is configured or independently verified.
+
+**CRITICAL:** `NexoraProfitVault.deposit` still follows full-gross principal accounting, not the owner-approved Model 2 upfront 20% commission. Model 2 (historical gross amount vs real 80% net capital, 100% nonredeemable plan reference) is only a preview. The system is **not** integrated to the live site and has not been deployed to BSC Testnet or Mainnet. An automated [mainnet blocker report](./scripts/check-mainnet-blockers.py) documents **11 active release blockers** and can be run in fail-closed mode via `python3 scripts/check-mainnet-blockers.py --enforce`.
+
+**Mainnet decision: BLOCKED. Do not turn on wallet transactions or receive investor funds.**

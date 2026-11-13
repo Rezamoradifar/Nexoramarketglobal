@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {NexoraModel2Vault} from "../src/NexoraModel2Vault.sol";
 import {NexoraModel2TestnetFactory} from "../src/NexoraModel2TestnetFactory.sol";
 import {NexoraRevenueSplitter} from "../src/NexoraRevenueSplitter.sol";
+import {NexoraTestUSDT} from "../src/NexoraTestUSDT.sol";
 import {MockUSDT} from "./MockUSDT.sol";
 
 interface VmNexoraModel2 {
@@ -334,5 +335,31 @@ contract NexoraModel2VaultTest {
             address(token), ADMIN, address(this), ALLOCATOR, wallets
         ) returns (NexoraModel2TestnetFactory) {} catch { reverted = true; }
         require(reverted, "Unsafe testnet factory could deploy on mainnet");
+    }
+
+    function testDirectTestnetContractsRejectMainnetAndLocalDefaultChain() public {
+        uint256[2] memory wrongChains = [uint256(56), uint256(31337)];
+        for (uint256 i; i < wrongChains.length; ++i) {
+            vm.chainId(wrongChains[i]);
+
+            try new NexoraModel2Vault(
+                address(token), ADMIN, address(this), ALLOCATOR, address(splitter)
+            ) returns (NexoraModel2Vault) {
+                revert("Model2 vault accepted a non-testnet chain");
+            } catch (bytes memory reason) {
+                require(bytes4(reason) == NexoraModel2Vault.TestnetOnly.selector,
+                    "Vault reverted for the wrong reason");
+            }
+
+            try new NexoraTestUSDT(ADMIN) returns (NexoraTestUSDT) {
+                revert("Test token accepted a non-testnet chain");
+            } catch (bytes memory reason) {
+                require(bytes4(reason) == NexoraTestUSDT.TestnetOnly.selector,
+                    "Token reverted for the wrong reason");
+            }
+        }
+        vm.chainId(97);
+        NexoraTestUSDT testToken = new NexoraTestUSDT(ADMIN);
+        require(testToken.owner() == ADMIN, "Unexpected test token owner");
     }
 }

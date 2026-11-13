@@ -150,7 +150,7 @@ contract NexoraModel2Vault is AccessControl, Pausable, ReentrancyGuard {
         uint256 afterGross = a.grossPositionBasis + amount;
         if (afterGross > MAX_PERSONAL_CAPITAL) revert ExceedsCapitalLimit();
         if (!a.everDeposited) {
-            if (afterDeposit < MIN_DEPOSIT) revert InvalidAmount();
+            if (afterGross < MIN_DEPOSIT) revert InvalidAmount();
             if (referrer_ != address(0)) {
                 if (referrer_ == msg.sender || !_accounts[referrer_].everDeposited) {
                     revert InvalidReferrer();

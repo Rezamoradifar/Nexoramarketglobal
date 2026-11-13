@@ -3,93 +3,86 @@ pragma solidity ^0.8.24;
 
 /**
  * @title NexoraEntryAllocationPreview
- * @notice SOLVENT, READ-ONLY accounting proposal; NOT a fund-transfer contract.
+ * @notice NON-EXECUTING preview of disclosed Model 2: GROSS transaction
+ *         visible in the account, but only NET paid-in capital is backed.
  *
- * New policy:
- *  - Each 1,000 USDT deposit is credited as 1,000 USDT user principal,
- *    and the 1,000 USDT remains in the user vault.
- *  - The full 1,000 USDT, not a reduced 800 USDT, is the conditional
- *    daily reward calculation basis.
- *  - If the owner gets 6% and ten company wallets get 1.4% each
- *    whenever a user deposits or reinvests, that 20% MUST be supplied
- *    IN ADDITION to principal by independently sourced company funds.
- *  - NEVER take the 20% from user deposits or already-funded user rewards
- *    while still reporting 100% as backed user principal.
- *  - Withdrawal fees are zero. Previous 90d maturity/24h withdrawal cap
- *    are specified separately and do not change full principal custody.
+ * This contract NEVER holds/transfers tokens. It is NOT implemented in
+ * NexoraProfitVault or any live frontend. It cannot be used as an oracle
+ * for guaranteed profit or the real account's available balance.
  *
- * The real independent company-funding path and proof of source of funds
- * remain unimplemented, unaudited and unapproved for any mainnet funds.
+ * On 1,000 USDT gross paid, the receipt must visibly show BOTH:
+ *  - 1,000 USDT: historical GROSS amount deposited and plan reference
+ *  -   800 USDT: NET actual principal remaining after 20% entry allocation
+ * DO NOT label the 1,000 USDT as withdrawable or protected capital.
  */
 contract NexoraEntryAllocationPreview {
-    uint256 public constant BPS = 10_000;
-    uint256 public constant USER_PRINCIPAL_BPS = 10_000;
-    uint256 public constant OWNER_BONUS_BPS = 600;
-    uint256 public constant COMPANY_BONUS_BPS = 140;
+    uint256 public constant DENOMINATOR = 10_000;
+    uint256 public constant OWNER_BPS = 600;      // 6% of gross
+    uint256 public constant COMPANY_BPS = 140;    // 1.4% per company
     uint256 public constant COMPANY_COUNT = 10;
     uint256 public constant WITHDRAWAL_FEE_BPS = 0;
-    uint256 public constant DAILY_WITHDRAWAL_CAP_BPS = 2_000;
+    uint256 public constant DAILY_WITHDRAWAL_BPS = 2_000; // 20% of gross reference
 
-    error InvalidAmount();
+    error ZeroAmount();
 
-    struct Allocation {
-        uint256 creditedUserPrincipal;
-        uint256 rewardCalculationBasis;
-        uint256 ownerBonusFromIndependentFunds;
-        uint256 companyBonusEachFromIndependentFunds;
-        uint256 sponsorFundsRequired;
-        uint256 totalExternalTokensRequired;
+    struct AccountReceipt {
+        uint256 grossAmountRecorded;
+        uint256 planReferenceAmount;
+        uint256 netPrincipalCredited;
+        uint256 ownerAllocation;
+        uint256 companyAllocationEach;
+        uint256 companyAllocationTotal;
+    }
+
+    function preview(uint256 grossPaidOrFundedReinvest)
+        public pure returns (AccountReceipt memory r)
+    {
+        if (grossPaidOrFundedReinvest == 0) revert ZeroAmount();
+        r.grossAmountRecorded = grossPaidOrFundedReinvest;
+        r.planReferenceAmount = grossPaidOrFundedReinvest;
+        r.ownerAllocation = _floorBps(grossPaidOrFundedReinvest, OWNER_BPS);
+        r.companyAllocationEach = _floorBps(grossPaidOrFundedReinvest, COMPANY_BPS);
+        r.companyAllocationTotal = r.companyAllocationEach * COMPANY_COUNT;
+        // Rounding dust is credited to user principal, not to insiders.
+        r.netPrincipalCredited = grossPaidOrFundedReinvest
+            - r.ownerAllocation - r.companyAllocationTotal;
     }
 
     /**
-     * @dev Models a NEW gross deposit with a separately prefunded company
-     * subsidy for payouts. No user funds are split, moved or transferred.
-     * Tiny amounts are rounded down on bonuses, not on user principal.
+     * A proposed plan may refer to 100% of the historical deposit for its
+     * daily cap. This reference is NOT user-owned principal and creates NO
+     * automatic reward; credits require independent realized funding.
      */
-    function preview(uint256 grossDeposit)
-        public pure returns (Allocation memory a)
-    {
-        if (grossDeposit == 0) revert InvalidAmount();
-        a.creditedUserPrincipal = grossDeposit;
-        a.rewardCalculationBasis = grossDeposit;
-        a.ownerBonusFromIndependentFunds =
-            _bpsFloor(grossDeposit, OWNER_BONUS_BPS);
-        a.companyBonusEachFromIndependentFunds =
-            _bpsFloor(grossDeposit, COMPANY_BONUS_BPS);
-        a.sponsorFundsRequired = a.ownerBonusFromIndependentFunds
-            + COMPANY_COUNT * a.companyBonusEachFromIndependentFunds;
-        // New on-chain deposit retains 100% and corporate sponsor pays separately.
-        a.totalExternalTokensRequired =
-            grossDeposit + a.sponsorFundsRequired;
+    function previewConditionalRewardCeiling(
+        uint256 grossReference,
+        uint16 conditionalTierBps
+    ) external pure returns (uint256) {
+        return _floorBps(grossReference, conditionalTierBps);
     }
 
     /**
-     * @notice Already funded and credited reward may become 100% principal
-     * on reinvest. Paying separate 6% + ten x 1.4% company bonuses
-     * requires new sponsor funds; no portion of rewards is deducted.
-     * The reward liability is converted to principal, not duplicated.
+     * Only actual MATURED and BACKED capital or credited rewards can be
+     * withdrawn. The nominal daily cap is 20% of the gross reference,
+     * but never creates funds beyond the actual mature balance.
      */
-    function previewReinvest(uint256 fundedCreditedReward)
-        external pure returns (Allocation memory a)
-    {
-        a = preview(fundedCreditedReward);
-        // Reinvested reward is already held inside the vault; hence the only
-        // additional tokens needed are sponsor-funded bonuses.
-        a.totalExternalTokensRequired = a.sponsorFundsRequired;
+    function previewWithdrawable(
+        uint256 historicalGrossDeposits,
+        uint256 alreadyPaidInCurrent24h,
+        uint256 actualMatureBackedBalance
+    ) external pure returns (
+        uint256 dailyCap,
+        uint256 remainingDailyAllowance,
+        uint256 currentlyWithdrawable
+    ) {
+        dailyCap = historicalGrossDeposits / 5;
+        remainingDailyAllowance = alreadyPaidInCurrent24h >= dailyCap
+            ? 0 : dailyCap - alreadyPaidInCurrent24h;
+        currentlyWithdrawable = actualMatureBackedBalance < remainingDailyAllowance
+            ? actualMatureBackedBalance : remainingDailyAllowance;
     }
 
-    /**
-     * 20% of external deposit basis per 24h is an independently enforced
-     * withdrawal policy. A 1,000 USDT principal can support a 200 USDT
-     * gross daily withdrawal cap, not 160 USDT.
-     */
-    function previewDailyCap(uint256 grossExternalDepositBasis)
-        external pure returns (uint256)
-    {
-        return grossExternalDepositBasis / 5;
-    }
-
-    function _bpsFloor(uint256 amount, uint256 bps) private pure returns (uint256) {
-        return amount / BPS * bps + (amount % BPS) * bps / BPS;
+    function _floorBps(uint256 amount, uint256 bps) private pure returns (uint256) {
+        return (amount / DENOMINATOR) * bps
+            + (amount % DENOMINATOR) * bps / DENOMINATOR;
     }
 }

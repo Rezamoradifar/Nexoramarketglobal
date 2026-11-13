@@ -42,6 +42,8 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Build Solidity
         run: forge build --sizes
+      - name: Verify Model2 accountSnapshot ABI selector
+        run: cast sig 'accountSnapshot(address)'
       - name: Validate beneficiary wallet registry (no RPC)
         run: python3 scripts/check-beneficiary-config.py
       - name: Run full Foundry suite with extended fuzzing (1024 cases per fuzz test)

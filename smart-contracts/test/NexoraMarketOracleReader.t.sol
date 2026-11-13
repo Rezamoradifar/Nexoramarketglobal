@@ -27,9 +27,9 @@ contract MockNexoraMarketFeed is INexoraMarketFeed {
         updatedAt = updated;
         answeredInRound = answered;
     }
-    function decimals() external view returns (uint8) { return _decimals; }
+    function decimals() external view override returns (uint8) { return _decimals; }
     function latestRoundData()
-        external view returns (
+        external view override returns (
             uint80, int256, uint256, uint256, uint80
         )
     {

@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "status": "CANDIDATE_ONLY_NOT_DEPLOYED_OWNERSHIP_UNVERIFIED",
+  "network": "BNB Smart Chain",
+  "testnetChainId": 97,
+  "targetMainnetChainId": 56,
+  "accountingNote": "The proposed Model-2 20% deposit/reinvest fee is not implemented in the live vault. This manifest configures recipients for separately funded revenue only; no user principal can be routed to these addresses.",
+  "revenueSplitBps": {
+    "vaultRewardReserve": 8000,
+    "owner": 600,
+    "eachCompany": 140,
+    "companyCount": 10
+  },
+  "splitterPoolWeights": {
+    "owner": 30,
+    "eachCompany": 7,
+    "total": 100
+  },
+  "constructorWallets": [
+    "0x1782bf2A11BdfF5B96c33Fe379457FF14338e1B4",
+    "0x9E1F29Fbd5D208A3c764e6c1404B029E1954fbF4",
+    "0xC1E2BB50a477dbD86Db8d6bd5162De6b915a2B3c",
+    "0x04f2175E3aEeC32C9faa2884829CFFD891d29846",
+    "0x6b628ac685C4cF2aC6a1A6c919C950cf451900f5",
+    "0xC6f1bBF3cc02c594E1022a84e3cF0746651c173A",
+    "0x13daB91230d2E97E2f76c7527910b396C99D1c03",
+    "0xdC9337310621c8F1d199BFF5B1DEa5F0742D963E",
+    "0x7f8af29E7C982793AB5EC25B7f2a0C082B0E2D9E",
+    "0x4094678E2de8fc1BFBeC28b06ab41eFa04A78CFF",
+    "0x5518Cc6579bA909c08E62C48B73Ef8971DC74Ef3"
+  ],
+  "recipients": [
+    {
+      "index": 0,
+      "role": "OWNER",
+      "address": "0x1782bf2A11BdfF5B96c33Fe379457FF14338e1B4",
+      "grossRevenueBps": 600,
+      "ofTwentyPercentPoolWeight": 30
+    },
+    {
+      "index": 1,
+      "role": "COMPANY_01",
+      "address": "0x9E1F29Fbd5D208A3c764e6c1404B029E1954fbF4",
+      "grossRevenueBps": 140,
+      "ofTwentyPercentPoolWeight": 7
+    },
+    {
+      "index": 2,
+      "role": "COMPANY_02",
+      "address": "0xC1E2BB50a477dbD86Db8d6bd5162De6b915a2B3c",
+      "grossRevenueBps": 140,
+      "ofTwentyPercentPoolWeight": 7
+    },
+    {
+      "index": 3,
+      "role": "COMPANY_03",
+      "address": "0x04f2175E3aEeC32C9faa2884829CFFD891d29846",
+      "grossRevenueBps": 140,
+      "ofTwentyPercentPoolWeight": 7
+    },
+    {
+      "index": 4,
+      "role": "COMPANY_04",
+      "address": "0x6b628ac685C4cF2aC6a1A6c919C950cf451900f5",
+      "grossRevenueBps": 140,
+      "ofTwentyPercentPoolWeight": 7
+    },
+    {
+      "index": 5,
+      "role": "COMPANY_05",
+      "address": "0xC6f1bBF3cc02c594E1022a84e3cF0746651c173A",
+      "grossRevenueBps": 140,
+      "ofTwentyPercentPoolWeight": 7
+    },
+    {
+      "index": 6,
+      "role": "COMPANY_06",
+      "address": "0x13daB91230d2E97E2f76c7527910b396C99D1c03",
+      "grossRevenueBps": 140,
+      "ofTwentyPercentPoolWeight": 7
+    },
+    {
+      "index": 7,
+      "role": "COMPANY_07",
+      "address": "0xdC9337310621c8F1d199BFF5B1DEa5F0742D963E",
+      "grossRevenueBps": 140,
+      "ofTwentyPercentPoolWeight": 7
+    },
+    {
+      "index": 8,
+      "role": "COMPANY_08",
+      "address": "0x7f8af29E7C982793AB5EC25B7f2a0C082B0E2D9E",
+      "grossRevenueBps": 140,
+      "ofTwentyPercentPoolWeight": 7
+    },
+    {
+      "index": 9,
+      "role": "COMPANY_09",
+      "address": "0x4094678E2de8fc1BFBeC28b06ab41eFa04A78CFF",
+      "grossRevenueBps": 140,
+      "ofTwentyPercentPoolWeight": 7
+    },
+    {
+      "index": 10,
+      "role": "COMPANY_10",
+      "address": "0x5518Cc6579bA909c08E62C48B73Ef8971DC74Ef3",
+      "grossRevenueBps": 140,
+      "ofTwentyPercentPoolWeight": 7
+    }
+  ]
+}

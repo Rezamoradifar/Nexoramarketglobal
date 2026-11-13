@@ -1,6 +1,10 @@
 # Nexora Profit Vault (v0.2 — TESTNET PROTOTYPE)
 
-**NOT audited, NOT deployed, and NOT ready for investor funds.** It is deliberately separate from the live website and the legacy Polygon contract.
+**NOT audited, NOT deployed, and NOT ready for investor funds.**
+
+**Latest alternate proposal (Model 2):** [Transparent gross deposit / net principal account model](./TRANSPARENT-GROSS-NET-ACCOUNT-MODEL.md) is **preview-only**, and is NOT represented by the executable vault code on this branch. The owner wants `Total Deposited: 1,000 USDT` displayed while 6% is allocated to the owner and ten company wallets each receive 1.4%. The actual **user-owned net principal is then 800 USDT**, and both figures must be distinctly labeled. A 1,000 USDT plan reference amount cannot be advertised as a fully backed or redeemable balance. The vault still follows the *alternative* full-principal accounting until a separately audited and approved Model 2 implementation replaces it; **do not deploy**.
+
+ It is deliberately separate from the live website and the legacy Polygon contract.
 
 ## Purpose and threat model
 

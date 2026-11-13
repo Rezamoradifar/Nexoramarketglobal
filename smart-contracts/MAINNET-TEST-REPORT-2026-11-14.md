@@ -6,10 +6,10 @@
 
 ## Executed checks
 
-Test run: [Nexora Mainnet Readiness CI #43520589859](https://github.com/Rezamoradifar/Nexoramarketglobal/actions/runs/43520589859)  
-Source commit: `13c3b420a31da4a0c818594836a25b5ded8e836e`  
+Test run: [Nexora Mainnet Readiness CI #43521333972](https://github.com/Rezamoradifar/Nexoramarketglobal/actions/runs/43521333972)  
+Source commit: `f54f60fcd9fc0347efebe250a52226a5be6be6ef` (auditable tested snapshot before this report update)  
 Automated harness: Foundry/Solidity, local Ethereum execution with mock tokens and beneficiary addresses; **1024 fuzz cases per fuzz test**.  
-Result: **78 tests passed, 0 failures, 0 skipped across 9 suites**.
+Result: **84 tests passed, 0 failures, 0 skipped across 10 suites**; source code compilation successful.
 
 | Tested property | Result | Scope |
 | --- | --- | --- |
@@ -22,9 +22,28 @@ Result: **78 tests passed, 0 failures, 0 skipped across 9 suites**.
 | Accounting conservation across deposits, revenue routing, claims and reinvest | PASS | Integration sequences and fuzz |
 | Reject fee-on-transfer tokens that would underfund deposits/revenue | PASS | Adversarial mock token tests |
 | Reject 6-decimal assets at vault/splitter creation | PASS | Adversarial mock token test |
+| Read-only market feed: stale, future, invalid and unanswered rounds rejected; unauthorized config/disable blocked | PASS | Mock AggregatorV3 adapter; **no real market feed connected** |
 | Reject unauthorized revenue routing and duplicate evidence identifiers | PASS | Existing contract unit tests |
 | One-transaction factory bootstrap and administrative role transfer | PASS | Simulated BSC chain IDs, **not** a deployed multisig |
 | Distinguish gross 1000/net 800 Model 2 math from actual vault implementation | PASS (GAP EXPOSED) | **Math preview only; production integration missing** |
+
+## Measured automated code coverage (NOT an audit)
+
+CI also runs `forge coverage --report summary` using its coverage compiler settings, and `npm audit --omit=dev --audit-level=high` for dependency vulnerability scanning.
+
+| Main Solidity module | Line coverage | Branch coverage |
+| --- | ---: | ---: |
+| Profit vault / principal & reward accounting | **91.67%** | **63.64%** |
+| Revenue router | **95.24%** | **42.86%** |
+| Revenue splitter | **94.12%** | **60.00%** |
+| Factory / role bootstrap | **100%** | **83.33%** |
+| Read-only market oracle adapter | **100%** | **87.50%** |
+
+The market adapter's latest-round response now checks that `answeredInRound >= roundId`, in addition to positive prices, update timestamps, non-future data, freshness, nonzero market IDs, feed contract code, and admin-only configuration. All tests use a local mock feed; **no external Chainlink proxy or live market service was integrated**.
+
+**Finding:** Branch coverage remains modest in the core router, splitter and profit vault. Their unexplored branches require adversarial tests, economic-model reconciliation, independent reviewer analysis, testnet gas/role testing and stronger property-based invariants before any financial deployment.
+
+**Dependency scan:** npm reported **0 vulnerabilities at the configured threshold** in this run. That does not constitute a Solidity audit, a comprehensive SBOM, or financial security approval.
 
 ## Release-blocking findings
 

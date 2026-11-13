@@ -526,6 +526,29 @@ contract NexoraModel2Vault is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
+     * Public ABI-stable 5-value snapshot for a safe READ-ONLY BNB Testnet UI.
+     * IMPORTANT: grossTotal and grossOpenPlanBasis are not backed liabilities;
+     * netPrincipal is the actual user-owned principal, before maturity rules.
+     */
+    function accountSnapshot(address user) external view returns (
+        uint256 grossDepositedLifetime,
+        uint256 grossOpenPlanBasis,
+        uint256 netPrincipal,
+        uint256 claimableRewards,
+        uint256 availableDailyWithdrawalCap
+    ) {
+        Account storage a = _accounts[user];
+        return (
+            a.grossDepositsLifetime,
+            a.grossPositionBasis,
+            a.principal,
+            a.baseRewards + a.referralRewards,
+            remainingWithdrawalCap(user)
+        );
+    }
+
+
+    /**
      * True when the vault's actual token balance backs all principal and
      * reward liabilities, excluding unsolicited token transfers.
      */

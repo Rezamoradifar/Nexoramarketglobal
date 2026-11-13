@@ -12,7 +12,7 @@ pragma solidity ^0.8.24;
  * - payoutWallets[1..10] each gets 7/100 of the 20% pool
  *   = 1.4% of gross routed revenue each.
  * - The ten other wallets are COMPANY wallets, not personal user wallets.
- * - Together these recipients receive only the router's 24% pool.
+ * - Together these recipients receive only the router's independently funded 20% pool.
  *
  * This contract cannot verify that deposited distribution tokens represent
  * realized *net profit*. Real business accounting/audit is off-chain.

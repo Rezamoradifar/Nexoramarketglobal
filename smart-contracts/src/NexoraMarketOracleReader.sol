@@ -79,9 +79,10 @@ contract NexoraMarketOracleReader is AccessControl {
     {
         FeedConfig memory f = feeds[marketId];
         if (!f.active) revert FeedNotActive();
-        (uint80 roundId, int256 value, , uint256 updated, ) =
+        (uint80 roundId, int256 value, , uint256 updated, uint80 answeredInRound) =
             INexoraMarketFeed(f.proxy).latestRoundData();
-        if (roundId == 0 || value <= 0 || updated == 0 ||
+        if (roundId == 0 || answeredInRound < roundId ||
+            value <= 0 || updated == 0 ||
             updated > block.timestamp || block.timestamp - updated > f.maxAge) {
             revert StaleOrInvalidPrice();
         }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import './styles.css';
+import Model2Preview from './Model2Preview.jsx';
 
 export const plans = [
   { name: 'VIP 1', rate: 1, capital: 10, directs: 0, volume: 0, accent: 'mint' },
@@ -12,7 +13,7 @@ export const plans = [
 const money = value => Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const navigation = [
   ['Home', '#home'], ['Invest', '#plans'], ['Markets', '#markets'],
-  ['Referrals', '#referrals'], ['Ranks', '#ranks'], ['Docs', '#docs'],
+  ['Referrals', '#referrals'], ['Ranks', '#ranks'], ['Model 2', '#model2-preview'], ['Docs', '#docs'],
 ];
 
 function Icon({ name, size = 22, className = '' }) {
@@ -192,5 +193,5 @@ function AccountModal({ onClose }) {
 
 export default function App() {
   const [accountOpen, setAccountOpen] = useState(false);
-  return <><a className="skip-link" href="#main">Skip to content</a><Header onAccount={() => setAccountOpen(true)}/><main id="main"><Hero/><MarketTicker/><div className="wide dashboard"><PlanCards/><div className="side-column"><StatusPanel/><StatsPanel/></div></div><Benefits/><ExtraSections/></main><footer className="footer wide"><div className="footer-brand"><span className="brand-mark">N</span> Nexora <span>Markets</span></div><span>© {new Date().getFullYear()} Nexora Markets · Frontend preview, not a live financial product.</span><a href="#home">Back to top ↑</a></footer>{accountOpen && <AccountModal onClose={() => setAccountOpen(false)}/>}</>;
+  return <><a className="skip-link" href="#main">Skip to content</a><Header onAccount={() => setAccountOpen(true)}/><main id="main"><Hero/><MarketTicker/><div className="wide dashboard"><PlanCards/><div className="side-column"><StatusPanel/><StatsPanel/></div></div><Benefits/><ExtraSections/><Model2Preview/></main><footer className="footer wide"><div className="footer-brand"><span className="brand-mark">N</span> Nexora <span>Markets</span></div><span>© {new Date().getFullYear()} Nexora Markets · Frontend preview, not a live financial product.</span><a href="#home">Back to top ↑</a></footer>{accountOpen && <AccountModal onClose={() => setAccountOpen(false)}/>}</>;
 }

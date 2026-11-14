@@ -15,5 +15,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build frontend
         run: npm run build
+      - name: Test testnet wallet safeguards
+        run: npm test
       - name: Check VPS deployment script syntax
         run: bash -n deploy/repair-live.sh deploy/connect-domain-ssl.sh deploy/diagnose.sh deploy/update-approved-ui.sh deploy/restore-original-sites.sh

@@ -3,6 +3,8 @@ on:
   push:
     branches: [feature/nexora-model2-deep-validation-20261114]
     paths: ['smart-contracts/**', '.github/workflows/nexora-model2-deep-validation.yml']
+  pull_request:
+    paths: ['smart-contracts/**', '.github/workflows/nexora-model2-deep-validation.yml']
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,5 +1,8 @@
 node_modules/
 dist/
+smart-contracts/cache/
+smart-contracts/out/
+__pycache__/
 .env
 .env.*
 !.env.example

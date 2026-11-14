@@ -1,5 +1,7 @@
 # Nexora Mainnet Release Gate — BNB Chain (56)
 
+> **Historical alternative-model checklist:** the 100%-backed sponsored-principal specification below is not the current Model 2 testnet prototype. Do not use this document as the final Model 2 terms. See the current [README](./README.md); all production audit, testnet, governance and funding gates remain open.
+
 > **Status: BLOCKED FOR MAINNET.** This repository contains an unaudited prototype. Do not deploy with live investor funds, enable deposits, or publish unverified guarantees. The purpose of this branch is to prepare verifiable artifacts for the eventual release.
 
 ## Immutable release specification

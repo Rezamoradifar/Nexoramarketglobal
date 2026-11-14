@@ -15,29 +15,16 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VAULT = ROOT / "src" / "NexoraProfitVault.sol"
-PREVIEW = ROOT / "src" / "NexoraEntryAllocationPreview.sol"
-MODEL2 = ROOT / "src" / "NexoraModel2Vault.sol"
 CONFIG = ROOT / "config" / "beneficiary-wallets.candidate.json"
 
 
 def collect_release_blockers() -> list[str]:
     blockers = []
-    vault_source = VAULT.read_text(encoding="utf-8")
-    preview_source = PREVIEW.read_text(encoding="utf-8")
-    if MODEL2.is_file() and "function deposit(" in MODEL2.read_text(encoding="utf-8"):
-        blockers.append(
-            "MODEL_2_TESTNET_PROTOTYPE_ONLY: the separate gross/net vault has "
-            "no verified deployment, independent audit, or production approval"
-        )
-    elif "a.principal = afterDeposit;" in vault_source:
-        blockers.append(
-            "MODEL_2_NOT_IN_VAULT: the legacy vault credits gross principal; "
-            "the separate executable model is missing"
-        )
-    if "function preview(" in preview_source and "function deposit(" not in preview_source:
-        blockers.append("MODEL_2_PRODUCTION_INTEGRATION_UNVERIFIED: the preview and "
-                        "testnet prototype are not a deployed financial product")
+    if not (ROOT / "src" / "NexoraModel2MainnetVault.sol").is_file():
+        blockers.append("MODEL_2_MAINNET_CANDIDATE_MISSING: no chain-56 candidate exists")
+    else:
+        blockers.append("MODEL_2_MAINNET_CANDIDATE_UNVERIFIED: local candidate has no independent audit, verified deployment or bytecode approval")
+    blockers.append("MODEL_2_SITE_INTEGRATION_UNVERIFIED: the original site has no verified mainnet wallet/contract integration")
     if not CONFIG.is_file():
         blockers.append("BENEFICIARIES_MISSING: cannot find candidate registry")
     else:
@@ -51,8 +38,9 @@ def collect_release_blockers() -> list[str]:
     # environment variables. Current source supplies none of those signoffs.
     blockers.extend([
         "NO_INDEPENDENT_SECURITY_AUDIT: Solidity contracts are unaudited",
-        "NO_BSC_TESTNET_CANARY: no verified chain-97 deploy and transaction results",
-        "NO_VERIFIED_ADMIN_MULTISIG: no real signer/threshold verification",
+        "NO_REVIEWED_MAINNET_CANARY: no controlled mainnet transactions have been performed after audit and deployment",
+        "NO_VERIFIED_SYNC_AND_ALLOCATION_KEEPER: direct synchronization and funded daily allocation are not automated",
+        "NO_VERIFIED_ADMIN_SIGNER_CONTROL: governance and operational wallet control are not verified",
         "NO_REVENUE_ORIGIN_ATTESTATION: source of investor rewards not demonstrated",
         "NO_COMPLIANCE_SIGNOFF: very high yield tiers and fees require legal review",
         "NO_PRODUCTION_UI_WALLET_AUDIT: live site/back-end/contract integration unverified",

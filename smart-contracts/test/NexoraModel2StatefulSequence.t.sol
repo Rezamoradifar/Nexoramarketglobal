@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Model2DeepFixture} from "./NexoraModel2DeepValidation.t.sol";
 import {NexoraModel2Vault} from "../src/NexoraModel2Vault.sol";
+import {NexoraModel2Core} from "../src/NexoraModel2Core.sol";
 
 /** A randomized sequence is one scenario, not a real chain transaction. */
 contract NexoraModel2StatefulSequenceTest is Model2DeepFixture {
@@ -28,8 +29,13 @@ contract NexoraModel2StatefulSequenceTest is Model2DeepFixture {
             eq(vault.remainingWithdrawalCap(who), ceiling - recent);
             uint256 team;
             uint256 activeChildren;
+            uint256 largestBranch;
             for (uint256 j; j < actors.length; ++j) {
-                NexoraModel2Vault.Account memory a = vault.getAccount(actors[j]);
+                NexoraModel2Core.Account memory a = vault.getAccount(actors[j]);
+                if (a.referrer == who) {
+                    uint256 volume = vault.branchVolume(who, actors[j]);
+                    if (volume > largestBranch) largestBranch = volume;
+                }
                 if (a.referrer == who && a.countedInParent) {
                     ++activeChildren;
                     require(a.grossPositionBasis >= 100 * U && now_ >= a.lastDepositAt + 1 days,
@@ -42,6 +48,7 @@ contract NexoraModel2StatefulSequenceTest is Model2DeepFixture {
                 }
             }
             eq(vault.teamVolume(who), team);
+            eq(vault.largestBranchVolume(who), largestBranch);
             eq(vault.getAccount(who).activeDirects, activeChildren);
         }
         checkLedgers();
@@ -56,7 +63,7 @@ contract NexoraModel2StatefulSequenceTest is Model2DeepFixture {
 
     function exercise(address who, uint256 choice, uint256 rnd, uint256 step) private {
         uint256 now_ = vm.getBlockTimestamp();
-        NexoraModel2Vault.Account memory a = vault.getAccount(who);
+        NexoraModel2Core.Account memory a = vault.getAccount(who);
         if (choice == 0 && !vault.paused() && !splitter.paused()) {
             uint256 topup = (1 + rnd % 50) * U;
             if (a.grossPositionBasis + topup <= 50_000 * U) { seed(who, topup, address(0)); ++successfulCalls; }

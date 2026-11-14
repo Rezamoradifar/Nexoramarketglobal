@@ -1,48 +1,33 @@
-# Nexora Model 2 — testnet prototype
+# Nexora Model 2 — chain-56 candidate
 
-**Status: unaudited, no verified deployment, and not approved for real funds.** This branch contains a separate executable `NexoraModel2Vault`, a testnet-only factory and a no-value test token. The older `NexoraProfitVault` is a different full-principal prototype and must not be used as the Model 2 deployment.
+**Status: locally tested candidate only. No deployed mainnet contract or independent audit is verified, and wallet transactions are not enabled.** The owner selected current gross open positions, a largest-branch limit of 50% of total team volume, and an individually anchored 24-hour allocation interval on 2026-11-14. The owner asked not to deploy on a public testnet. Local EVM simulations use mock tokens and do not broadcast.
 
-The Model 2 vault and the test token each reject construction outside chain ID 97. The factory independently enforces the same restriction. Chain ID alone is not proof that an RPC endpoint or deployment is trustworthy. No source file or automated test is a security audit, proof of realized profit, or authorization to use mainnet.
+The shared `NexoraModel2Core` contains the accounting. The existing `NexoraModel2Vault` remains chain-97 guarded; the new `NexoraModel2MainnetVault` and atomic `NexoraModel2MainnetFactory` require chain 56 and pin Binance-Peg USDT (`0x55d398326f99059fF775485246999027B3197955`). A chain ID, address and decimals check is not independent verification of a deployed contract or token.
 
-## Current prototype accounting
+## Terms of the candidate
 
-- A 1,000-token external deposit records 1,000 as historical gross deposited and open gross plan reference. The vault retains **800** as net principal and transfers **200** to the splitter. The owner may claim 60 and each of the ten company beneficiaries 14; these are allocations, not automatically completed wallet transfers.
-- Reinvestment can only use credited, funded rewards. It applies the same 20% allocation and creates a new 90-day net-principal tranche.
-- Principal tranches mature after 90 days from their own deposit or reinvestment. Reward claims mature 90 days after the first external deposit. Claims and principal withdrawals share a cap of 20% of lifetime gross external deposits over a rolling 24-hour window; reinvestment does not increase this cap. No additional withdrawal fee is charged.
-- Tier rates of 1%–2.5% are conditional caps, not guaranteed or automatic earnings. A funder must supply reward tokens and an authorized allocator must submit an allocation. In the single-wallet testnet rehearsal, the selected owner performs both roles; this is not independent governance. The contract does not prove tokens came from trading profit. Referral credits are 15% / 7% / 3% of a funded base reward.
-- The 11 beneficiary addresses in `config/beneficiary-wallets.candidate.json` have format and uniqueness checks. Control, legal roles and the separate administrative multisig are not established by those checks.
+- On a 1,000 USDT external entry, 1,000 is a gross historical/open-position reference, **800 is backed user principal**, and 200 is allocated to the splitter: 60 claimable by the owner and 14 by each of ten company wallets. Gross reference is not redeemable principal; splitter allocations are not automatically claimed.
+- Reinvestment of already funded rewards repeats the 20% allocation. Each net-principal tranche is locked for 90 days from its own entry. Reward claims are locked 90 days from the first deposit. Principal and reward claims share a rolling 24-hour limit of 20% of lifetime external gross deposits; reinvestment does not increase it. No additional withdrawal fee is charged.
+- The five daily caps (1%, 1.25%, 1.5%, 2%, 2.5%) are limits on authorized credits, not guaranteed earnings. A role must separately fund rewards and an allocator must submit each credit. The contract does not verify that funding is trading profit. Eligible uplines receive 15% / 7% / 3% of the funded base credit.
+- Open gross reference counts across three levels. Higher tiers require the largest branch to be at most 50% of the overall team volume, plus the specified gross capital and direct thresholds. The first allocation is at least 24 hours after the latest deposit/reinvestment, and subsequent credits are at least 24 hours apart. There is no fixed 00:00 UTC settlement.
+- `syncDirect` requires an on-chain call after a member qualifies. There is no verified keeper or automatic allocator. Branch balance uses an incrementally maintained max-heap rather than a fixed 128-direct limit; storage and gas behavior still need independent review.
+- `config/beneficiary-wallets.candidate.json` has the supplied public recipients; format checks do not establish wallet control. Administrative/funder/allocator addresses are constructor inputs. Same-wallet roles are supported but are a single point of control, not independent governance. The earlier testnet-only role file is not proof of mainnet authorization or signer control.
 
-## Important differences from the currently published site
-
-The live site is an older preview and its proposal must not be presented as an exact description of this branch. In particular, this prototype uses current **gross** open positions for three-level team volume; it does not calculate the lowest net balance over a prior 24-hour window. Its balance test requires the largest branch to be no more than 50% of total current volume; the older site describes a 50% contribution cap against a tier target. It also uses an individually anchored 24-hour reward limit, not the site's 00:00 UTC pro-rata settlement. `syncDirect` requires a transaction after maturity and no keeper is included. These economic and operational differences need owner confirmation and independent review before a production specification can be finalized; do not silently equate the two models.
-
-## Local verification
-
-Install Node.js, Foundry and the pinned OpenZeppelin dependency, then run:
+## Verification
 
 ```bash
 cd smart-contracts
 npm install --ignore-scripts --no-audit --no-fund
 forge build --sizes
-forge test -vv --fuzz-runs 1024
-python3 scripts/test-local-model2.py
+forge test -vv
+python3 scripts/check-beneficiary-config.py
 python3 scripts/check-mainnet-blockers.py --enforce
 ```
 
-The last command deliberately exits nonzero while mainnet blockers remain. `test-local-model2.py` starts its own disposable loopback-only Anvil instance, performs local mock-token deposit, allocations, reinvestment, claim and withdrawal transactions, and exercises the frontend wallet encoder. Its time travel is a simulation, not a public BNB Testnet transaction or a 90-day live observation.
+Mainnet candidate tests set the chain ID to 56 in a local EVM and install mock token code at the canonical address; this does not exercise real USDT or the live chain. The last command deliberately reports remaining blockers and performs no RPC, signing or transaction. Passing local tests and static analysis is not a security audit. A controlled real-network canary, if performed after review, consumes real funds and is not yet done.
 
-For a read-only check against an independently chosen BNB Testnet RPC, set `BSC_TESTNET_RPC_URL` and run `bash scripts/testnet-preflight.sh`. It checks the returned chain ID, the candidate registry and compilation; it neither signs nor broadcasts.
+## Work still required
 
-## Testnet deployment and frontend
+Independent smart-contract review and remediation, verified deployment artifacts and signers, evidence of beneficiaries' control, a credible externally funded reward source, an audited automation/monitoring path, original-site wallet integration, regulatory review and an operational incident plan are outstanding. The original Site is separate from the React test panel in this repository; neither is proof of a live financial product. No private keys or seed phrases belong in chat or source control.
 
-The owner selected `0x1782bf2A11BdfF5B96c33Fe379457FF14338e1B4` for all **testnet-only roles** in `config/testnet-roles.candidate.json`. Signer control and testnet funding remain unverified. Run `python3 scripts/check-testnet-roles.py --enforce` to check address format and the selected mode; it does not verify wallet control or balances.
-
-For the owner's single-wallet rehearsal, use `NexoraModel2SingleWalletTestnetFactory` on chain 97 with a separately deployed `NexoraTestUSDT` mock token and the ordered 11-wallet array. The original `NexoraModel2TestnetFactory` remains available for tests with distinct operational roles. Verify the resulting vault, splitter, token, roles and source on the testnet explorer. Record deployment and canary transaction hashes. Never send keys or seed phrases in chat or commit them.
-
-The unpublished React test panel requires both `VITE_NEXORA_MODEL2_TESTNET_VAULT` and `VITE_NEXORA_MODEL2_TESTNET_TOKEN` to be set to the verified testnet addresses. It rechecks chain 97, bytecode presence, the vault's token address, and the token's `NXTTEST` symbol and decimals before requesting user-confirmed test transactions. Address and symbol checks do **not** establish contract authenticity or replace source verification. An approval is for the entered amount, not an unlimited allowance.
-
-## Remaining release gates
-
-Public BNB Testnet deployment and explorer verification; signed canary tests; frontend-to-testnet integration on the actual site; final reconciliation of the plan and public disclosures; ownership/control confirmation for beneficiaries and a verified multisig; independently substantiated reward funding; independent security audit and remediation; legal review; and operational monitoring all remain open. Do not use the prototype to accept real investor funds.
-
-Earlier policy and test documents in this directory describe historical snapshots or alternative models. They are retained for traceability, not as the current Model 2 specification.
+Historical documents in this directory describe alternative proposals and do not override these selected terms.

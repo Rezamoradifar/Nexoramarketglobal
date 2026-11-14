@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {NexoraModel2Vault} from "../src/NexoraModel2Vault.sol";
+import {NexoraModel2Core} from "../src/NexoraModel2Core.sol";
 import {NexoraRevenueSplitter} from "../src/NexoraRevenueSplitter.sol";
 import {NexoraModel2TestnetFactory} from "../src/NexoraModel2TestnetFactory.sol";
 import {NexoraTestUSDT} from "../src/NexoraTestUSDT.sol";
@@ -62,7 +63,7 @@ abstract contract Model2DeepFixture {
     function checkLedgers() internal view {
         uint256 net; uint256 rewards;
         for (uint256 i; i < actors.length; ++i) {
-            NexoraModel2Vault.Account memory a = vault.getAccount(actors[i]);
+            NexoraModel2Core.Account memory a = vault.getAccount(actors[i]);
             net += a.principal; rewards += a.baseRewards + a.referralRewards;
             uint256 tn; uint256 tg;
             for (uint256 j; j < vault.principalTrancheCount(actors[i]); ++j) {
@@ -108,7 +109,7 @@ contract NexoraModel2DeepValidationTest is Model2DeepFixture {
         seed(A, 500 * U, address(0)); seed(B, 1250 * U, A); seed(C, 1250 * U, A);
         vm.warp(T + 1 days); vault.syncDirect(B); vault.syncDirect(C); eq(vault.tierBps(A), 125);
         seed(B, 1, A); eq(vault.getAccount(A).activeDirects, 1);
-        reject(address(this), abi.encodeCall(NexoraModel2Vault.syncDirect, (B)), NexoraModel2Vault.NotMature.selector);
+        reject(address(this), abi.encodeCall(NexoraModel2Core.syncDirect, (B)), NexoraModel2Core.NotMature.selector);
         vm.warp(T + 2 days); vault.syncDirect(B);
         eq(vault.getAccount(A).activeDirects, 2); eq(vault.tierBps(A), 100); checkLedgers();
     }
@@ -139,65 +140,81 @@ contract NexoraModel2DeepValidationTest is Model2DeepFixture {
         vm.warp(T + 1 days); vault.syncDirect(B); eq(vault.getAccount(A).activeDirects, 1);
         vm.warp(T + 90 days); vm.prank(B); vault.withdrawPrincipal(25 * U);
         eq(vault.getAccount(A).activeDirects, 0);
-        reject(address(this), abi.encodeCall(NexoraModel2Vault.syncDirect, (B)), NexoraModel2Vault.NotEligible.selector); checkLedgers();
+        reject(address(this), abi.encodeCall(NexoraModel2Core.syncDirect, (B)), NexoraModel2Core.NotEligible.selector); checkLedgers();
     }
     function testReferrerRulesRejectSelfFutureMemberAndChanges() public {
-        reject(A, abi.encodeCall(NexoraModel2Vault.deposit, (10 * U, A)), NexoraModel2Vault.InvalidReferrer.selector);
-        reject(A, abi.encodeCall(NexoraModel2Vault.deposit, (10 * U, B)), NexoraModel2Vault.InvalidReferrer.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.deposit, (10 * U, A)), NexoraModel2Core.InvalidReferrer.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.deposit, (10 * U, B)), NexoraModel2Core.InvalidReferrer.selector);
         seed(A, 100 * U, address(0)); seed(B, 100 * U, A); seed(C, 100 * U, address(0));
-        reject(B, abi.encodeCall(NexoraModel2Vault.deposit, (U, C)), NexoraModel2Vault.InvalidReferrer.selector);
-        reject(A, abi.encodeCall(NexoraModel2Vault.deposit, (U, B)), NexoraModel2Vault.InvalidReferrer.selector);
+        reject(B, abi.encodeCall(NexoraModel2Core.deposit, (U, C)), NexoraModel2Core.InvalidReferrer.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.deposit, (U, B)), NexoraModel2Core.InvalidReferrer.selector);
         eq(vault.directCount(A), 1); require(vault.directAt(A, 0) == B, "wrong child");
     }
-    function testMaximum128DirectsAnd129thRejectedExplicitly() public {
+    function testMoreThan128DirectsRetainCorrectRank() public {
         seed(A, 500 * U, address(0));
-        for (uint256 i; i < 128; ++i) seed(address(uint160(0x4000 + i)), 100 * U, A);
-        eq(vault.directCount(A), 128);
-        reject(address(0x9000), abi.encodeCall(NexoraModel2Vault.deposit, (100 * U, A)), NexoraModel2Vault.TooManyDirects.selector);
+        for (uint256 i; i < 160; ++i) seed(address(uint160(0x4000 + i)), 100 * U, A);
+        eq(vault.directCount(A), 160);
+        eq(vault.largestBranchVolume(A), 100 * U);
         vm.warp(T + 1 days);
-        for (uint256 i; i < 128; ++i) vault.syncDirect(address(uint160(0x4000 + i)));
-        eq(vault.getAccount(A).activeDirects, 128); eq(vault.tierBps(A), 125); checkLedgers();
+        for (uint256 i; i < 160; ++i) vault.syncDirect(address(uint160(0x4000 + i)));
+        eq(vault.getAccount(A).activeDirects, 160); eq(vault.tierBps(A), 125); checkLedgers();
+    }
+    function testLargestBranchTracksIncreasesAndDecreases() public {
+        seed(A, 500 * U, address(0));
+        seed(B, 2_000 * U, A); seed(C, 1_000 * U, A); seed(D, 1_000 * U, A);
+        eq(vault.teamVolume(A), 4_000 * U); eq(vault.largestBranchVolume(A), 2_000 * U);
+        vm.warp(T + 90 days);
+        vm.prank(B); vault.withdrawPrincipal(400 * U);
+        eq(vault.branchVolume(A, B), 1_500 * U); eq(vault.largestBranchVolume(A), 1_500 * U);
+        seed(C, 1_000 * U, A);
+        eq(vault.branchVolume(A, C), 2_000 * U); eq(vault.largestBranchVolume(A), 2_000 * U);
+        vm.prank(C); vault.withdrawPrincipal(400 * U);
+        eq(vault.branchVolume(A, C), 1_500 * U); eq(vault.largestBranchVolume(A), 1_500 * U);
+        vm.warp(T + 91 days);
+        vm.prank(B); vault.withdrawPrincipal(400 * U);
+        eq(vault.branchVolume(A, B), 1_000 * U); eq(vault.largestBranchVolume(A), 1_500 * U);
+        checkLedgers();
     }
     function testMinimumMaximumGrossCapitalAndZeroInputs() public {
-        reject(A, abi.encodeCall(NexoraModel2Vault.deposit, (0, address(0))), NexoraModel2Vault.InvalidAmount.selector);
-        reject(A, abi.encodeCall(NexoraModel2Vault.deposit, (10 * U - 1, address(0))), NexoraModel2Vault.InvalidAmount.selector);
-        reject(A, abi.encodeCall(NexoraModel2Vault.deposit, (50_000 * U + 1, address(0))), NexoraModel2Vault.ExceedsCapitalLimit.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.deposit, (0, address(0))), NexoraModel2Core.InvalidAmount.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.deposit, (10 * U - 1, address(0))), NexoraModel2Core.InvalidAmount.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.deposit, (50_000 * U + 1, address(0))), NexoraModel2Core.ExceedsCapitalLimit.selector);
         seed(A, 10 * U, address(0)); seed(B, 50_000 * U, address(0));
         eq(vault.getAccount(A).principal, 8 * U); eq(vault.getAccount(B).principal, 40_000 * U);
-        reject(B, abi.encodeCall(NexoraModel2Vault.deposit, (1, address(0))), NexoraModel2Vault.ExceedsCapitalLimit.selector);
-        reject(A, abi.encodeCall(NexoraModel2Vault.withdrawPrincipal, (0)), NexoraModel2Vault.InvalidAmount.selector);
-        reject(A, abi.encodeCall(NexoraModel2Vault.withdrawPrincipal, (9 * U)), NexoraModel2Vault.InsufficientPrincipal.selector);
-        reject(A, abi.encodeCall(NexoraModel2Vault.reinvestRewards, (0)), NexoraModel2Vault.InvalidAmount.selector);
-        reject(A, abi.encodeCall(NexoraModel2Vault.reinvestRewards, (1)), NexoraModel2Vault.InvalidAmount.selector);
-        reject(address(this), abi.encodeCall(NexoraModel2Vault.fundRewards, (0)), NexoraModel2Vault.InvalidAmount.selector);
+        reject(B, abi.encodeCall(NexoraModel2Core.deposit, (1, address(0))), NexoraModel2Core.ExceedsCapitalLimit.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.withdrawPrincipal, (0)), NexoraModel2Core.InvalidAmount.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.withdrawPrincipal, (9 * U)), NexoraModel2Core.InsufficientPrincipal.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.reinvestRewards, (0)), NexoraModel2Core.InvalidAmount.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.reinvestRewards, (1)), NexoraModel2Core.InvalidAmount.selector);
+        reject(address(this), abi.encodeCall(NexoraModel2Core.fundRewards, (0)), NexoraModel2Core.InvalidAmount.selector);
     }
     function testNoRewardFromDepositsDonationOrTimeAlone() public {
         seed(A, 1000 * U, address(0)); token.transfer(address(vault), 500 * U); vm.warp(T + 365 days);
         eq(vault.unallocatedRewards(), 0);
-        reject(address(this), abi.encodeCall(NexoraModel2Vault.allocateReward, (A, U, bytes32(uint256(3)))), NexoraModel2Vault.InsufficientRewardPool.selector);
-        reject(A, abi.encodeCall(NexoraModel2Vault.claimRewards, ()), NexoraModel2Vault.InvalidAmount.selector);
+        reject(address(this), abi.encodeCall(NexoraModel2Core.allocateReward, (A, U, bytes32(uint256(3)))), NexoraModel2Core.InsufficientRewardPool.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.claimRewards, ()), NexoraModel2Core.InvalidAmount.selector);
         require(!vault.usedReportIds(bytes32(uint256(3))), "failed allocation marked used"); checkLedgers();
     }
     function testReportReplayCooldownAndBoundaryAreEnforced() public {
         seed(A, 1000 * U, address(0)); vault.fundRewards(100 * U);
-        reject(address(this), abi.encodeCall(NexoraModel2Vault.allocateReward, (A, U, bytes32(uint256(4)))), NexoraModel2Vault.NotEligible.selector);
+        reject(address(this), abi.encodeCall(NexoraModel2Core.allocateReward, (A, U, bytes32(uint256(4)))), NexoraModel2Core.NotEligible.selector);
         vm.warp(T + 1 days);
-        reject(address(this), abi.encodeCall(NexoraModel2Vault.allocateReward, (A, U, bytes32(0))), NexoraModel2Vault.InvalidOrUsedReport.selector);
-        reject(address(this), abi.encodeCall(NexoraModel2Vault.allocateReward, (A, 10 * U + 1, bytes32(uint256(4)))), NexoraModel2Vault.ExceedsDailyCap.selector);
+        reject(address(this), abi.encodeCall(NexoraModel2Core.allocateReward, (A, U, bytes32(0))), NexoraModel2Core.InvalidOrUsedReport.selector);
+        reject(address(this), abi.encodeCall(NexoraModel2Core.allocateReward, (A, 10 * U + 1, bytes32(uint256(4)))), NexoraModel2Core.ExceedsDailyCap.selector);
         vault.allocateReward(A, 10 * U, bytes32(uint256(4)));
-        reject(address(this), abi.encodeCall(NexoraModel2Vault.allocateReward, (A, U, bytes32(uint256(4)))), NexoraModel2Vault.InvalidOrUsedReport.selector);
+        reject(address(this), abi.encodeCall(NexoraModel2Core.allocateReward, (A, U, bytes32(uint256(4)))), NexoraModel2Core.InvalidOrUsedReport.selector);
         vm.warp(T + 2 days - 1);
-        reject(address(this), abi.encodeCall(NexoraModel2Vault.allocateReward, (A, U, bytes32(uint256(5)))), NexoraModel2Vault.CreditTooSoon.selector);
+        reject(address(this), abi.encodeCall(NexoraModel2Core.allocateReward, (A, U, bytes32(uint256(5)))), NexoraModel2Core.CreditTooSoon.selector);
         vm.warp(T + 2 days); vault.allocateReward(A, U, bytes32(uint256(5))); checkLedgers();
     }
     function testRewardClaimClipsAtSharedDailyLimitAndPreservesResidual() public {
         seed(A, 1000 * U, address(0)); vault.fundRewards(210 * U);
         for (uint256 i; i < 21; ++i) { vm.warp(T + (i + 1) * 1 days); vault.allocateReward(A, 10 * U, bytes32(i + 100)); }
         vm.warp(T + 90 days - 1);
-        reject(A, abi.encodeCall(NexoraModel2Vault.claimRewards, ()), NexoraModel2Vault.NotMature.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.claimRewards, ()), NexoraModel2Core.NotMature.selector);
         vm.warp(T + 90 days); vm.prank(A); eq(vault.claimRewards(), 200 * U);
         eq(vault.getAccount(A).baseRewards, 10 * U);
-        reject(A, abi.encodeCall(NexoraModel2Vault.claimRewards, ()), NexoraModel2Vault.WithdrawalLimitExceeded.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.claimRewards, ()), NexoraModel2Core.WithdrawalLimitExceeded.selector);
         vm.warp(T + 91 days); vm.prank(A); eq(vault.claimRewards(), 10 * U);
         eq(vault.remainingWithdrawalCap(A), 190 * U); checkLedgers();
     }
@@ -214,9 +231,9 @@ contract NexoraModel2DeepValidationTest is Model2DeepFixture {
         seed(A, 1000 * U, address(0)); vault.fundRewards(10 * U);
         vm.warp(T + 1 days); vault.allocateReward(A, 10 * U, bytes32(uint256(202))); vault.pause();
         bytes4 paused = bytes4(keccak256("EnforcedPause()"));
-        reject(A, abi.encodeCall(NexoraModel2Vault.deposit, (U, address(0))), paused);
-        reject(A, abi.encodeCall(NexoraModel2Vault.reinvestRewards, (U)), paused);
-        reject(address(this), abi.encodeCall(NexoraModel2Vault.allocateReward, (A, U, bytes32(uint256(203)))), paused);
+        reject(A, abi.encodeCall(NexoraModel2Core.deposit, (U, address(0))), paused);
+        reject(A, abi.encodeCall(NexoraModel2Core.reinvestRewards, (U)), paused);
+        reject(address(this), abi.encodeCall(NexoraModel2Core.allocateReward, (A, U, bytes32(uint256(203)))), paused);
         vm.warp(T + 90 days); vm.prank(A); vault.withdrawPrincipal(190 * U);
         vm.prank(A); vault.claimRewards(); eq(vault.remainingWithdrawalCap(A), 0);
         vault.unpause(); seed(A, 10 * U, address(0)); checkLedgers();
@@ -226,23 +243,23 @@ contract NexoraModel2DeepValidationTest is Model2DeepFixture {
         // Fund the attempted top-up so rejection occurs at the paused splitter,
         // not earlier at the ERC20 insufficient-balance check.
         token.mint(A, U); splitter.pause();
-        reject(A, abi.encodeCall(NexoraModel2Vault.deposit, (U, address(0))), bytes4(keccak256("EnforcedPause()")));
+        reject(A, abi.encodeCall(NexoraModel2Core.deposit, (U, address(0))), bytes4(keccak256("EnforcedPause()")));
         eq(token.balanceOf(A), U); eq(vault.getAccount(A).grossDepositsLifetime, 1000 * U);
         vm.warp(T + 90 days); vm.prank(A); vault.withdrawPrincipal(200 * U);
         vm.prank(beneficiaries[0]); splitter.claim(); splitter.unpause(); checkLedgers();
     }
     function testUnauthorizedFundingAllocationPauseAndUnpauseRejected() public {
         bytes4 access = bytes4(keccak256("AccessControlUnauthorizedAccount(address,bytes32)"));
-        reject(STRANGER, abi.encodeCall(NexoraModel2Vault.fundRewards, (U)), access);
-        reject(STRANGER, abi.encodeCall(NexoraModel2Vault.allocateReward, (A, U, bytes32(uint256(204)))), access);
-        reject(STRANGER, abi.encodeCall(NexoraModel2Vault.pause, ()), access);
-        vault.pause(); reject(STRANGER, abi.encodeCall(NexoraModel2Vault.unpause, ()), access); vault.unpause();
+        reject(STRANGER, abi.encodeCall(NexoraModel2Core.fundRewards, (U)), access);
+        reject(STRANGER, abi.encodeCall(NexoraModel2Core.allocateReward, (A, U, bytes32(uint256(204)))), access);
+        reject(STRANGER, abi.encodeCall(NexoraModel2Core.pause, ()), access);
+        vault.pause(); reject(STRANGER, abi.encodeCall(NexoraModel2Core.unpause, ()), access); vault.unpause();
     }
     function testReadOnlySnapshotDistinguishesGrossNetRewardsAndCapacityNotLiquidity() public {
         seed(A, 1000 * U, address(0));
         (uint256 gross, uint256 basis, uint256 net, uint256 reward, uint256 cap) = vault.accountSnapshot(A);
         eq(gross, 1000 * U); eq(basis, 1000 * U); eq(net, 800 * U); eq(reward, 0); eq(cap, 200 * U);
-        reject(A, abi.encodeCall(NexoraModel2Vault.withdrawPrincipal, (U)), NexoraModel2Vault.NoMaturedTranche.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.withdrawPrincipal, (U)), NexoraModel2Core.NoMaturedTranche.selector);
         (gross, basis, net, reward, cap) = vault.accountSnapshot(STRANGER); eq(gross + basis + net + reward + cap, 0);
     }
     function testTinyTopUpDoesNotPayMoreThanActualReceivedTokens() public {
@@ -296,7 +313,7 @@ contract NexoraModel2RollingRegressionTest is Model2DeepFixture {
         vm.warp(T + 91 days - 1); vm.prank(A); vault.withdrawPrincipal(200 * U - 1);
         vm.warp(T + 91 days);
         eq(vault.remainingWithdrawalCap(A), 1);
-        reject(A, abi.encodeCall(NexoraModel2Vault.withdrawPrincipal, (200 * U)), NexoraModel2Vault.WithdrawalLimitExceeded.selector);
+        reject(A, abi.encodeCall(NexoraModel2Core.withdrawPrincipal, (200 * U)), NexoraModel2Core.WithdrawalLimitExceeded.selector);
         vm.prank(A); vault.withdrawPrincipal(1);
         eq(vault.withdrawnInLast24Hours(A), 200 * U); eq(vault.remainingWithdrawalCap(A), 0);
         vm.warp(T + 92 days - 1); eq(vault.remainingWithdrawalCap(A), 200 * U - 1);

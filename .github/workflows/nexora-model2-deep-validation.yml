@@ -28,6 +28,20 @@ jobs:
         run: |
           npm install --ignore-scripts --no-audit --no-fund
           python3 scripts/check-beneficiary-config.py
+      - name: Build and check actual deployment bytecode sizes (no broadcast)
+        run: |
+          forge build > /tmp/nexora-model2-build.log 2>&1
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for name, constructor_bytes in [('NexoraModel2Vault', 160), ('NexoraRevenueSplitter', 448), ('NexoraModel2TestnetFactory', 480), ('NexoraTestUSDT', 32)]:
+              data = json.loads(Path(f'out/{name}.sol/{name}.json').read_text())
+              runtime = len(bytes.fromhex(data['deployedBytecode']['object'].removeprefix('0x')))
+              initcode = len(bytes.fromhex(data['bytecode']['object'].removeprefix('0x'))) + constructor_bytes
+              assert runtime <= 24576, f'{name} runtime exceeds EIP-170 limit'
+              assert initcode <= 49152, f'{name} initcode+constructor exceeds EIP-3860 limit'
+              print(f'BYTECODE_SIZE_OK {name}: runtime={runtime} initcode_with_constructor={initcode}')
+          PY
       - name: Full suite including deep Model2 regressions
         run: |
           set +e
@@ -37,9 +51,8 @@ jobs:
           python3 - <<'PY'
           import re
           from pathlib import Path
-          lines = Path('/tmp/nexora-model2-deep.log').read_text(errors='replace').splitlines()
-          for line in lines:
-              if re.search(r'\[FAIL|Error|error:|Ran \d+ test suites|Suite result|testHundredAccountsComplete|testFinding|testAllFiveVip|testThreeLevelReferral|NexoraModel2DeepValidationTest|NexoraModel2PolicyFindingTest', line):
+          for line in Path('/tmp/nexora-model2-deep.log').read_text(errors='replace').splitlines():
+              if re.search(r'\[FAIL|Error|error:|Ran \d+ test suites|Suite result|testHundredAccountsComplete|testRolling|testCallback|testFuzz_Stateful|testAllFiveVip|testThreeLevelReferral|NexoraModel2DeepValidationTest', line):
                   print(line)
           PY
           exit "$result"
@@ -63,12 +76,13 @@ jobs:
         if: always()
         run: |
           echo 'NO_BROADCAST_NO_REAL_FUNDS_NO_MAINNET_APPROVAL'
-          echo 'Needs public testnet deployment, independent audit, signer attestations and resolved policy findings.'
+          echo 'Needs public testnet deployment, independent audit, signer attestations and production signoff.'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: nexora-model2-deep-validation-${{ github.sha }}
           path: |
+            /tmp/nexora-model2-build.log
             /tmp/nexora-model2-deep.log
             /tmp/nexora-model2-coverage.log
           retention-days: 14

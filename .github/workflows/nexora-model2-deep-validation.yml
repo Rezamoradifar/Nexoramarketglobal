@@ -78,7 +78,7 @@ jobs:
         if: always()
         run: |
           echo 'NO_BROADCAST_NO_REAL_FUNDS_NO_MAINNET_APPROVAL'
-          echo 'Needs public testnet deployment, independent audit, signer attestations and production signoff.'
+          echo 'Needs independent audit, signer attestations, original-site integration and a controlled mainnet canary after review.'
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {NexoraModel2Vault} from "../src/NexoraModel2Vault.sol";
+import {NexoraModel2Core} from "../src/NexoraModel2Core.sol";
 import {NexoraModel2TestnetFactory} from "../src/NexoraModel2TestnetFactory.sol";
 import {NexoraModel2SingleWalletTestnetFactory} from "../src/NexoraModel2SingleWalletTestnetFactory.sol";
 import {NexoraRevenueSplitter} from "../src/NexoraRevenueSplitter.sol";
@@ -88,7 +89,7 @@ contract NexoraModel2VaultTest {
     function testGrossOneThousandNetEightHundredAndAllElevenSharesFunded() public {
         uint256 before = token.balanceOf(ALICE);
         _deposit(ALICE, 1_000 * U, address(0));
-        NexoraModel2Vault.Account memory a = vault.getAccount(ALICE);
+        NexoraModel2Core.Account memory a = vault.getAccount(ALICE);
         _eq(before - token.balanceOf(ALICE), 1_000 * U);
         _eq(a.grossDepositsLifetime, 1_000 * U);
         _eq(a.grossPositionBasis, 1_000 * U);
@@ -124,7 +125,7 @@ contract NexoraModel2VaultTest {
         vault.fundRewards(100 * U);
         vm.warp(block.timestamp + 1 days);
         _reverted(ALLOCATOR, abi.encodeCall(
-            NexoraModel2Vault.allocateReward,
+            NexoraModel2Core.allocateReward,
             (ALICE, 10 * U + 1, bytes32(uint256(2)))
         ));
         _solvent();
@@ -140,7 +141,7 @@ contract NexoraModel2VaultTest {
         vm.prank(ALICE);
         vault.reinvestRewards(10 * U);
 
-        NexoraModel2Vault.Account memory a = vault.getAccount(ALICE);
+        NexoraModel2Core.Account memory a = vault.getAccount(ALICE);
         _eq(a.principal, 808 * U);
         _eq(a.grossPositionBasis, 1_010 * U);
         _eq(a.grossDepositsLifetime, 1_000 * U); // reinvest not external deposit
@@ -161,7 +162,7 @@ contract NexoraModel2VaultTest {
         for (uint256 i; i < 4; ++i) {
             vm.prank(ALICE);
             vault.withdrawPrincipal(200 * U);
-            NexoraModel2Vault.Account memory account = vault.getAccount(ALICE);
+            NexoraModel2Core.Account memory account = vault.getAccount(ALICE);
             _eq(account.principal, (600 - i * 200) * U);
             _eq(account.grossPositionBasis, (750 - i * 250) * U);
             _eq(account.grossDepositsLifetime, 1_000 * U);
@@ -187,14 +188,14 @@ contract NexoraModel2VaultTest {
         vault.withdrawPrincipal(300 * U); // only original tranche is matured
         _eq(vault.getAccount(ALICE).principal, 900 * U);
         _eq(vault.getAccount(ALICE).grossPositionBasis, 1_125 * U);
-        _reverted(ALICE, abi.encodeCall(NexoraModel2Vault.withdrawPrincipal, (1 * U)));
+        _reverted(ALICE, abi.encodeCall(NexoraModel2Core.withdrawPrincipal, (1 * U)));
         vm.warp(block.timestamp + 1 days);
         vm.prank(ALICE);
         vault.withdrawPrincipal(300 * U);
         vm.warp(block.timestamp + 1 days);
         // The remaining original net principal is 200 U, and the 400 U
         // from the newer deposit is still time-locked.
-        _reverted(ALICE, abi.encodeCall(NexoraModel2Vault.withdrawPrincipal, (300 * U)));
+        _reverted(ALICE, abi.encodeCall(NexoraModel2Core.withdrawPrincipal, (300 * U)));
         vm.prank(ALICE);
         vault.withdrawPrincipal(200 * U);
         _solvent();
@@ -215,7 +216,7 @@ contract NexoraModel2VaultTest {
         splitter.revokeRole(splitter.FUNDER_ROLE(), address(vault));
         uint256 userBefore = token.balanceOf(ALICE);
         _reverted(ALICE, abi.encodeCall(
-            NexoraModel2Vault.deposit, (1_000 * U, address(0))
+            NexoraModel2Core.deposit, (1_000 * U, address(0))
         ));
         _eq(token.balanceOf(ALICE), userBefore);
         _eq(token.balanceOf(address(vault)), 0);
@@ -234,7 +235,7 @@ contract NexoraModel2VaultTest {
         vault.allocateReward(ALICE, 10 * U, bytes32(uint256(13)));
         splitter.revokeRole(splitter.FUNDER_ROLE(), address(vault));
         uint256 balanceBefore = token.balanceOf(address(vault));
-        _reverted(ALICE, abi.encodeCall(NexoraModel2Vault.reinvestRewards, (10 * U)));
+        _reverted(ALICE, abi.encodeCall(NexoraModel2Core.reinvestRewards, (10 * U)));
         _eq(token.balanceOf(address(vault)), balanceBefore);
         _eq(vault.getAccount(ALICE).baseRewards, 10 * U);
         _eq(vault.getAccount(ALICE).principal, 800 * U);
@@ -245,11 +246,11 @@ contract NexoraModel2VaultTest {
         _deposit(ALICE, 1_000 * U, address(0));
         vm.warp(block.timestamp + 90 days);
         _reverted(wallets[0], abi.encodeCall(
-            NexoraModel2Vault.withdrawPrincipal, (200 * U)
+            NexoraModel2Core.withdrawPrincipal, (200 * U)
         ));
         for (uint256 i = 1; i < 11; ++i) {
             _reverted(wallets[i], abi.encodeCall(
-                NexoraModel2Vault.withdrawPrincipal, (200 * U)
+                NexoraModel2Core.withdrawPrincipal, (200 * U)
             ));
         }
         _eq(vault.getAccount(ALICE).principal, 800 * U);
@@ -300,7 +301,7 @@ contract NexoraModel2VaultTest {
         uint256 amount = 1 + uint256(raw) % (200 * U);
         vm.prank(ALICE);
         vault.withdrawPrincipal(amount);
-        NexoraModel2Vault.Account memory a = vault.getAccount(ALICE);
+        NexoraModel2Core.Account memory a = vault.getAccount(ALICE);
         _eq(a.principal, 800 * U - amount);
         require(a.grossPositionBasis <= 1_000 * U &&
                 a.grossPositionBasis >= a.principal,
@@ -348,7 +349,7 @@ contract NexoraModel2VaultTest {
             ) returns (NexoraModel2Vault) {
                 revert("Model2 vault accepted a non-testnet chain");
             } catch (bytes memory reason) {
-                require(bytes4(reason) == NexoraModel2Vault.TestnetOnly.selector,
+                require(bytes4(reason) == NexoraModel2Core.TestnetOnly.selector,
                     "Vault reverted for the wrong reason");
             }
 

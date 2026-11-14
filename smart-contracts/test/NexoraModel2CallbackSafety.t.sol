@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {NexoraModel2Vault} from "../src/NexoraModel2Vault.sol";
+import {NexoraModel2Core} from "../src/NexoraModel2Core.sol";
 import {NexoraRevenueSplitter} from "../src/NexoraRevenueSplitter.sol";
 import {FeeOnTransferMockNexora, SixDecimalTokenNexora} from "./NexoraAdversarialToken.t.sol";
 
@@ -20,12 +21,13 @@ contract Model2CallbackMock is ERC20 {
     uint256 public attempts;
     bool public succeeded;
     bytes4 public errorSelector;
+    bytes public callbackResult;
     bool private inCallback;
     constructor() ERC20("TEST hostile callback", "TCALL") {}
     function mint(address recipient, uint256 amount) external { _mint(recipient, amount); }
     function arm(address vault, address splitter, bytes calldata data) external {
         target = vault; split = splitter; payload = data;
-        attempts = 0; succeeded = false; errorSelector = bytes4(0);
+        attempts = 0; succeeded = false; errorSelector = bytes4(0); delete callbackResult;
     }
     function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
         bool result = super.transferFrom(from, to, amount);
@@ -34,6 +36,7 @@ contract Model2CallbackMock is ERC20 {
             ++attempts;
             (bool ok, bytes memory reason) = target.call(payload);
             succeeded = ok;
+            callbackResult = reason;
             if (reason.length >= 4) {
                 bytes4 sel; assembly { sel := mload(add(reason, 32)) }
                 errorSelector = sel;
@@ -77,7 +80,7 @@ contract NexoraModel2CallbackSafetyTest {
         require(vault.isSolvent() && splitter.isSolvent(), "token liabilities not backed");
     }
     function testCallbackCannotReactivateDirectDuringTopUp() public {
-        token.arm(address(vault), address(splitter), abi.encodeCall(NexoraModel2Vault.syncDirect, (CHILD)));
+        token.arm(address(vault), address(splitter), abi.encodeCall(NexoraModel2Core.syncDirect, (CHILD)));
         vm.prank(CHILD); vault.deposit(U, PARENT);
         assertBlocked();
         require(vault.getAccount(PARENT).activeDirects == 0, "parent retained premature qualification");
@@ -88,17 +91,41 @@ contract NexoraModel2CallbackSafetyTest {
     function testCallbackCannotReactivateDirectDuringReinvest() public {
         token.mint(address(this), U); token.approve(address(vault), U); vault.fundRewards(U);
         vault.allocateReward(CHILD, U / 2, bytes32(uint256(9)));
-        token.arm(address(vault), address(splitter), abi.encodeCall(NexoraModel2Vault.syncDirect, (CHILD)));
+        token.arm(address(vault), address(splitter), abi.encodeCall(NexoraModel2Core.syncDirect, (CHILD)));
         vm.prank(CHILD); vault.reinvestRewards(U / 2);
         assertBlocked();
         require(vault.getAccount(PARENT).activeDirects == 0, "reinvest callback bypassed maturity");
     }
+    function testSplitterCallbackSeesCompleteDepositAccounting() public {
+        token.arm(address(vault), address(splitter), abi.encodeCall(NexoraModel2Core.accountSnapshot, (CHILD)));
+        vm.prank(CHILD); vault.deposit(U, PARENT);
+        require(token.attempts() == 1 && token.succeeded(), "snapshot callback not exercised");
+        (uint256 gross, uint256 basis, uint256 principal, uint256 rewards, uint256 cap) =
+            abi.decode(token.callbackResult(), (uint256, uint256, uint256, uint256, uint256));
+        require(gross == 101 * U && basis == 101 * U, "callback observed partial gross ledger");
+        require(principal == 808 * U / 10 && rewards == 0 && cap == 202 * U / 10,
+            "callback observed partial net ledger");
+        require(vault.isSolvent() && splitter.isSolvent(), "backing changed");
+    }
+    function testSplitterCallbackSeesCompleteReinvestAccounting() public {
+        token.mint(address(this), U); token.approve(address(vault), U); vault.fundRewards(U);
+        vault.allocateReward(CHILD, U / 2, bytes32(uint256(99)));
+        token.arm(address(vault), address(splitter), abi.encodeCall(NexoraModel2Core.accountSnapshot, (CHILD)));
+        vm.prank(CHILD); vault.reinvestRewards(U / 2);
+        require(token.attempts() == 1 && token.succeeded(), "snapshot callback not exercised");
+        (uint256 gross, uint256 basis, uint256 principal, uint256 rewards, uint256 cap) =
+            abi.decode(token.callbackResult(), (uint256, uint256, uint256, uint256, uint256));
+        require(gross == 100 * U && basis == 1005 * U / 10, "callback observed partial gross ledger");
+        require(principal == 804 * U / 10 && rewards == 0 && cap == 20 * U,
+            "callback observed partial net ledger");
+        require(vault.isSolvent() && splitter.isSolvent(), "backing changed");
+    }
     function testCallbacksCannotReenterDepositWithdrawalClaimOrReinvest() public {
         bytes[4] memory calls;
-        calls[0] = abi.encodeCall(NexoraModel2Vault.deposit, (U, address(0)));
-        calls[1] = abi.encodeCall(NexoraModel2Vault.withdrawPrincipal, (U));
-        calls[2] = abi.encodeCall(NexoraModel2Vault.claimRewards, ());
-        calls[3] = abi.encodeCall(NexoraModel2Vault.reinvestRewards, (U));
+        calls[0] = abi.encodeCall(NexoraModel2Core.deposit, (U, address(0)));
+        calls[1] = abi.encodeCall(NexoraModel2Core.withdrawPrincipal, (U));
+        calls[2] = abi.encodeCall(NexoraModel2Core.claimRewards, ());
+        calls[3] = abi.encodeCall(NexoraModel2Core.reinvestRewards, (U));
         for (uint256 i; i < 4; ++i) {
             token.arm(address(vault), address(splitter), calls[i]);
             vm.prank(CHILD); vault.deposit(U, PARENT);
@@ -111,10 +138,10 @@ contract NexoraModel2CallbackSafetyTest {
         NexoraModel2Vault v = new NexoraModel2Vault(address(taxed), address(this), address(this), address(this), address(s));
         s.grantRole(s.FUNDER_ROLE(), address(v));
         taxed.mint(CHILD, 1000 * U); vm.prank(CHILD); taxed.approve(address(v), type(uint256).max);
-        vm.prank(CHILD); (bool ok, bytes memory reason) = address(v).call(abi.encodeCall(NexoraModel2Vault.deposit, (1000 * U, address(0))));
+        vm.prank(CHILD); (bool ok, bytes memory reason) = address(v).call(abi.encodeCall(NexoraModel2Core.deposit, (1000 * U, address(0))));
         require(!ok && reason.length >= 4, "taxed input accepted");
         bytes4 sel; assembly { sel := mload(add(reason, 32)) }
-        require(sel == NexoraModel2Vault.FeeOnTransferNotSupported.selector, "wrong rejection");
+        require(sel == NexoraModel2Core.FeeOnTransferNotSupported.selector, "wrong rejection");
         require(taxed.balanceOf(CHILD) == 1000 * U, "failed deposit lost funds");
         require(v.totalPrincipal() == 0 && s.totalClaimable() == 0, "failed deposit created liability");
     }

@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 /**
  * @title NexoraRevenueSplitter
- * @notice Un-audited TESTNET prototype for one owner wallet + ten other wallets.
+ * @notice Un-audited prototype for one owner wallet + ten other wallets.
  * @dev Accepts ERC20 distributions from an authorized funder. In Model 2 the
  * vault funds it with the explicitly disclosed 20% of deposits and reinvests;
  * the legacy revenue router instead funds it from separate routed revenue.
@@ -19,7 +19,7 @@ pragma solidity ^0.8.24;
  * This contract cannot verify that deposited distribution tokens represent
  * realized *net profit*. Real business accounting/audit is off-chain.
  * It is not wired to the legacy NexoraProfitVault deposit flow. The separate
- * Model 2 testnet factory wires it to that prototype's deposit/reinvest flow.
+ * Model 2 factories wire it to their candidate deposit/reinvest flow.
  */
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";

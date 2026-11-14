@@ -4,7 +4,7 @@
   "network": "BNB Smart Chain",
   "testnetChainId": 97,
   "targetMainnetChainId": 56,
-  "accountingNote": "The proposed Model-2 20% deposit/reinvest fee is not implemented in the live vault. This manifest configures recipients for separately funded revenue only; no user principal can be routed to these addresses.",
+  "accountingNote": "Model 2 candidate: 80% of each gross entry becomes backed user principal; 20% funds the splitter (6% owner and 1.4% per company). Rewards require a separately funded reserve. The legacy revenueSplitBps object is retained only for older separate-revenue tests; its 80% is not Model 2 user rewards.",
   "revenueSplitBps": {
     "vaultRewardReserve": 8000,
     "owner": 600,
@@ -107,5 +107,11 @@
       "grossRevenueBps": 140,
       "ofTwentyPercentPoolWeight": 7
     }
-  ]
+  ],
+  "entryAllocationBps": {
+    "netUserPrincipal": 8000,
+    "owner": 600,
+    "eachCompany": 140,
+    "companyCount": 10
+  }
 }

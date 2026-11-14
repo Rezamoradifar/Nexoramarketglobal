@@ -29,8 +29,13 @@ contract NexoraModel2StatefulSequenceTest is Model2DeepFixture {
             eq(vault.remainingWithdrawalCap(who), ceiling - recent);
             uint256 team;
             uint256 activeChildren;
+            uint256 largestBranch;
             for (uint256 j; j < actors.length; ++j) {
                 NexoraModel2Core.Account memory a = vault.getAccount(actors[j]);
+                if (a.referrer == who) {
+                    uint256 volume = vault.branchVolume(who, actors[j]);
+                    if (volume > largestBranch) largestBranch = volume;
+                }
                 if (a.referrer == who && a.countedInParent) {
                     ++activeChildren;
                     require(a.grossPositionBasis >= 100 * U && now_ >= a.lastDepositAt + 1 days,
@@ -43,6 +48,7 @@ contract NexoraModel2StatefulSequenceTest is Model2DeepFixture {
                 }
             }
             eq(vault.teamVolume(who), team);
+            eq(vault.largestBranchVolume(who), largestBranch);
             eq(vault.getAccount(who).activeDirects, activeChildren);
         }
         checkLedgers();

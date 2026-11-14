@@ -33,7 +33,6 @@ abstract contract NexoraModel2Core is AccessControl, Pausable, ReentrancyGuard {
     uint256 public constant MAX_WITHDRAWAL_BPS = 2_000;
     uint256 public constant WITHDRAWAL_FEE_BPS = 0;
     uint256 public constant BPS = 10_000;
-    uint256 public constant MAX_DIRECT_CHILDREN = 128;
     uint256 public constant ENTRY_COMPANY_BPS = 2_000;
 
     IERC20 public immutable asset;
@@ -74,6 +73,10 @@ abstract contract NexoraModel2Core is AccessControl, Pausable, ReentrancyGuard {
     mapping(address => address[]) private _children;
     mapping(address => uint256) public teamVolume; // 3-level open gross plan basis, not net principal
     mapping(address => mapping(address => uint256)) public branchVolume;
+    // Max-heaps keep branch-balance checks independent of referral count.
+    // Positions are one-based; each historical branch occupies one slot.
+    mapping(address => address[]) private _branchHeap;
+    mapping(address => mapping(address => uint256)) private _branchHeapPosition;
     mapping(bytes32 => bool) public usedReportIds;
     uint256 public totalPrincipal;
     uint256 public unallocatedRewards;
@@ -99,7 +102,7 @@ abstract contract NexoraModel2Core is AccessControl, Pausable, ReentrancyGuard {
     error InvalidAsset();
     error InvalidAmount();
     error InvalidReferrer();
-    error TooManyDirects();
+    error MissingBranch();
     error ExceedsCapitalLimit();
     error NotMature();
     error NotEligible();
@@ -146,7 +149,6 @@ abstract contract NexoraModel2Core is AccessControl, Pausable, ReentrancyGuard {
             if (afterGross < MIN_DEPOSIT) revert InvalidAmount();
             if (referrer_ != address(0)) {
                 if (referrer_ == msg.sender || !_accounts[referrer_].everDeposited) revert InvalidReferrer();
-                if (_children[referrer_].length >= MAX_DIRECT_CHILDREN) revert TooManyDirects();
                 a.referrer = referrer_;
                 _children[referrer_].push(msg.sender);
             }
@@ -433,13 +435,46 @@ abstract contract NexoraModel2Core is AccessControl, Pausable, ReentrancyGuard {
     function _hasBalancedBranches(address member) internal view returns (bool) {
         uint256 volume = teamVolume[member];
         if (volume == 0) return false;
-        address[] storage children = _children[member];
-        uint256 largest;
-        for (uint256 i; i < children.length; ++i) {
-            uint256 b = branchVolume[member][children[i]];
-            if (b > largest) largest = b;
+        return largestBranchVolume(member) * 2 <= volume;
+    }
+    function largestBranchVolume(address member) public view returns (uint256) {
+        address[] storage heap = _branchHeap[member];
+        return heap.length == 0 ? 0 : branchVolume[member][heap[0]];
+    }
+    function _swapBranches(address parent, uint256 first, uint256 second) private {
+        address[] storage heap = _branchHeap[parent];
+        address a = heap[first - 1];
+        address b = heap[second - 1];
+        heap[first - 1] = b;
+        heap[second - 1] = a;
+        _branchHeapPosition[parent][a] = second;
+        _branchHeapPosition[parent][b] = first;
+    }
+    function _updateBranchHeap(address parent, address branch, bool increase) private {
+        address[] storage heap = _branchHeap[parent];
+        uint256 position = _branchHeapPosition[parent][branch];
+        if (position == 0) {
+            if (!increase) revert MissingBranch();
+            heap.push(branch);
+            position = heap.length;
+            _branchHeapPosition[parent][branch] = position;
         }
-        return largest * 2 <= volume;
+        if (increase) {
+            while (position > 1) {
+                uint256 previous = position / 2;
+                if (branchVolume[parent][heap[previous - 1]] >= branchVolume[parent][heap[position - 1]]) break;
+                _swapBranches(parent, previous, position);
+                position = previous;
+            }
+        } else {
+            while (position * 2 <= heap.length) {
+                uint256 child = position * 2;
+                if (child < heap.length && branchVolume[parent][heap[child]] > branchVolume[parent][heap[child - 1]]) ++child;
+                if (branchVolume[parent][heap[position - 1]] >= branchVolume[parent][heap[child - 1]]) break;
+                _swapBranches(parent, position, child);
+                position = child;
+            }
+        }
     }
     function _updateTeamVolume(address member, uint256 amount, bool increase) internal {
         address parent = _accounts[member].referrer;
@@ -447,6 +482,7 @@ abstract contract NexoraModel2Core is AccessControl, Pausable, ReentrancyGuard {
         for (uint8 depth; depth < 3 && parent != address(0); ++depth) {
             if (increase) { teamVolume[parent] += amount; branchVolume[parent][branch] += amount; }
             else { teamVolume[parent] -= amount; branchVolume[parent][branch] -= amount; }
+            _updateBranchHeap(parent, branch, increase);
             branch = parent;
             parent = _accounts[parent].referrer;
         }

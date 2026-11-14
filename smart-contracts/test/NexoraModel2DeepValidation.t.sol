@@ -150,14 +150,30 @@ contract NexoraModel2DeepValidationTest is Model2DeepFixture {
         reject(A, abi.encodeCall(NexoraModel2Core.deposit, (U, B)), NexoraModel2Core.InvalidReferrer.selector);
         eq(vault.directCount(A), 1); require(vault.directAt(A, 0) == B, "wrong child");
     }
-    function testMaximum128DirectsAnd129thRejectedExplicitly() public {
+    function testMoreThan128DirectsRetainCorrectRank() public {
         seed(A, 500 * U, address(0));
-        for (uint256 i; i < 128; ++i) seed(address(uint160(0x4000 + i)), 100 * U, A);
-        eq(vault.directCount(A), 128);
-        reject(address(0x9000), abi.encodeCall(NexoraModel2Core.deposit, (100 * U, A)), NexoraModel2Core.TooManyDirects.selector);
+        for (uint256 i; i < 160; ++i) seed(address(uint160(0x4000 + i)), 100 * U, A);
+        eq(vault.directCount(A), 160);
+        eq(vault.largestBranchVolume(A), 100 * U);
         vm.warp(T + 1 days);
-        for (uint256 i; i < 128; ++i) vault.syncDirect(address(uint160(0x4000 + i)));
-        eq(vault.getAccount(A).activeDirects, 128); eq(vault.tierBps(A), 125); checkLedgers();
+        for (uint256 i; i < 160; ++i) vault.syncDirect(address(uint160(0x4000 + i)));
+        eq(vault.getAccount(A).activeDirects, 160); eq(vault.tierBps(A), 125); checkLedgers();
+    }
+    function testLargestBranchTracksIncreasesAndDecreases() public {
+        seed(A, 500 * U, address(0));
+        seed(B, 2_000 * U, A); seed(C, 1_000 * U, A); seed(D, 1_000 * U, A);
+        eq(vault.teamVolume(A), 4_000 * U); eq(vault.largestBranchVolume(A), 2_000 * U);
+        vm.warp(T + 90 days);
+        vm.prank(B); vault.withdrawPrincipal(400 * U);
+        eq(vault.branchVolume(A, B), 1_500 * U); eq(vault.largestBranchVolume(A), 1_500 * U);
+        seed(C, 1_000 * U, A);
+        eq(vault.branchVolume(A, C), 2_000 * U); eq(vault.largestBranchVolume(A), 2_000 * U);
+        vm.prank(C); vault.withdrawPrincipal(400 * U);
+        eq(vault.branchVolume(A, C), 1_500 * U); eq(vault.largestBranchVolume(A), 1_500 * U);
+        vm.warp(T + 91 days);
+        vm.prank(B); vault.withdrawPrincipal(400 * U);
+        eq(vault.branchVolume(A, B), 1_000 * U); eq(vault.largestBranchVolume(A), 1_500 * U);
+        checkLedgers();
     }
     function testMinimumMaximumGrossCapitalAndZeroInputs() public {
         reject(A, abi.encodeCall(NexoraModel2Core.deposit, (0, address(0))), NexoraModel2Core.InvalidAmount.selector);

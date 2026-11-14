@@ -133,6 +133,35 @@ contract NexoraModel2MainnetCandidateTest {
             v.hasRole(v.ALLOCATOR_ROLE(), ADMIN), "selected roles did not persist");
     }
 
+    function testMainnetCandidateThreeLevelFundedReferralsLocally() public {
+        NexoraModel2MainnetFactory f = new NexoraModel2MainnetFactory(ADMIN, FUNDER, ALLOCATOR, wallets);
+        NexoraModel2MainnetVault v = f.vault();
+        address[4] memory members = [ALICE, address(0xA05), address(0xA06), address(0xA07)];
+        for (uint256 i; i < members.length; ++i) {
+            token.mint(members[i], 1000 * U);
+            vm.prank(members[i]); token.approve(address(v), 1000 * U);
+            vm.prank(members[i]); v.deposit(1000 * U, i == 0 ? address(0) : members[i - 1]);
+        }
+        require(v.teamVolume(members[0]) == 3000 * U && v.largestBranchVolume(members[0]) == 3000 * U,
+            "three-level volume mismatch");
+        token.mint(FUNDER, 125 * U / 10);
+        vm.prank(FUNDER); token.approve(address(v), 125 * U / 10);
+        vm.prank(FUNDER); v.fundRewards(125 * U / 10);
+        vm.warp(T + 1 days);
+        for (uint256 i = 1; i < members.length; ++i) v.syncDirect(members[i]);
+        vm.prank(ALLOCATOR); v.allocateReward(members[3], 10 * U, bytes32(uint256(1)));
+        require(v.getAccount(members[2]).referralRewards == 15 * U / 10, "level 1 mismatch");
+        require(v.getAccount(members[1]).referralRewards == 7 * U / 10, "level 2 mismatch");
+        require(v.getAccount(members[0]).referralRewards == 3 * U / 10, "level 3 mismatch");
+        require(v.getAccount(members[3]).baseRewards == 10 * U && v.isSolvent(), "funded reward mismatch");
+        vm.warp(T + 90 days);
+        vm.prank(members[0]); require(v.claimRewards() == 3 * U / 10, "level 3 claim failed");
+        vm.prank(members[1]); require(v.claimRewards() == 7 * U / 10, "level 2 claim failed");
+        vm.prank(members[2]); require(v.claimRewards() == 15 * U / 10, "level 1 claim failed");
+        vm.prank(members[3]); require(v.claimRewards() == 10 * U, "base claim failed");
+        require(v.totalClaimableRewards() == 0 && v.isSolvent(), "claim ledger mismatch");
+    }
+
     function testOneHundredAccountsCompleteLocalChain56Lifecycle() public {
         NexoraModel2MainnetFactory f = new NexoraModel2MainnetFactory(ADMIN, FUNDER, ALLOCATOR, wallets);
         NexoraModel2MainnetVault v = f.vault();

@@ -4,19 +4,22 @@ pragma solidity ^0.8.24;
 /**
  * @title NexoraRevenueSplitter
  * @notice Un-audited TESTNET prototype for one owner wallet + ten other wallets.
- * @dev Accepts only separately funded ERC20 distributions, NEVER user principal.
+ * @dev Accepts ERC20 distributions from an authorized funder. In Model 2 the
+ * vault funds it with the explicitly disclosed 20% of deposits and reinvests;
+ * the legacy revenue router instead funds it from separate routed revenue.
  *
  * Payout percentages are FIXED BY CODE (only addresses are constructor inputs):
  * - payoutWallets[0] gets 30/100 of the splitter's 20% pool
- *   = 6% of gross routed revenue.
+ *   = 6% of the gross amount when the pool represents 20% of that amount.
  * - payoutWallets[1..10] each gets 7/100 of the 20% pool
- *   = 1.4% of gross routed revenue each.
+ *   = 1.4% of that gross amount each.
  * - The ten other wallets are COMPANY wallets, not personal user wallets.
- * - Together these recipients receive only the router's independently funded 20% pool.
+ * - Together these recipients receive only the funded splitter pool.
  *
  * This contract cannot verify that deposited distribution tokens represent
  * realized *net profit*. Real business accounting/audit is off-chain.
- * It is deliberately NOT wired to NexoraProfitVault or user deposits.
+ * It is not wired to the legacy NexoraProfitVault deposit flow. The separate
+ * Model 2 testnet factory wires it to that prototype's deposit/reinvest flow.
  */
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -97,8 +100,8 @@ contract NexoraRevenueSplitter is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @notice Explicitly fund a new distribution. The funder's 11 payouts
-     * are fully backed by newly transferred stablecoins.
+     * @notice Explicitly fund a new distribution. The 11 claimable shares
+     * are backed by the tokens transferred to this contract.
      * @dev Authorized funding does not prove net profit, hence evidenceId
      * must identify independently reviewable accounting documentation.
      */

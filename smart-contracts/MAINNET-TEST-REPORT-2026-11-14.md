@@ -1,5 +1,7 @@
 # Nexora Mainnet Security and Test Report — 14 November 2026
 
+> **Historical snapshot:** this report predates the separate Model 2 testnet vault and its later tests. Statements below about Model 2 being only a preview refer to the older `NexoraProfitVault`, not the newer `NexoraModel2Vault`. See the current [README](./README.md). The security and real-network blockers still require independent verification.
+
 > **Outcome: UNIT/INTEGRATION TESTS PASS. FINANCIAL MAINNET RELEASE BLOCKED.**
 >
 > This is not an independent audit, a live BNB Testnet deployment, a real-USDT transaction test, a legal assessment or proof of profitability. Do **not** turn on deposits or claims.

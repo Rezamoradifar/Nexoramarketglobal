@@ -3,7 +3,9 @@ pragma solidity ^0.8.24;
 
 import {NexoraModel2Vault} from "../src/NexoraModel2Vault.sol";
 import {NexoraModel2TestnetFactory} from "../src/NexoraModel2TestnetFactory.sol";
+import {NexoraModel2SingleWalletTestnetFactory} from "../src/NexoraModel2SingleWalletTestnetFactory.sol";
 import {NexoraRevenueSplitter} from "../src/NexoraRevenueSplitter.sol";
+import {NexoraTestUSDT} from "../src/NexoraTestUSDT.sol";
 import {MockUSDT} from "./MockUSDT.sol";
 
 interface VmNexoraModel2 {
@@ -334,5 +336,91 @@ contract NexoraModel2VaultTest {
             address(token), ADMIN, address(this), ALLOCATOR, wallets
         ) returns (NexoraModel2TestnetFactory) {} catch { reverted = true; }
         require(reverted, "Unsafe testnet factory could deploy on mainnet");
+    }
+
+    function testDirectTestnetContractsRejectMainnetAndLocalDefaultChain() public {
+        uint256[2] memory wrongChains = [uint256(56), uint256(31337)];
+        for (uint256 i; i < wrongChains.length; ++i) {
+            vm.chainId(wrongChains[i]);
+
+            try new NexoraModel2Vault(
+                address(token), ADMIN, address(this), ALLOCATOR, address(splitter)
+            ) returns (NexoraModel2Vault) {
+                revert("Model2 vault accepted a non-testnet chain");
+            } catch (bytes memory reason) {
+                require(bytes4(reason) == NexoraModel2Vault.TestnetOnly.selector,
+                    "Vault reverted for the wrong reason");
+            }
+
+            try new NexoraTestUSDT(ADMIN) returns (NexoraTestUSDT) {
+                revert("Test token accepted a non-testnet chain");
+            } catch (bytes memory reason) {
+                require(bytes4(reason) == NexoraTestUSDT.TestnetOnly.selector,
+                    "Token reverted for the wrong reason");
+            }
+        }
+        vm.chainId(97);
+        NexoraTestUSDT testToken = new NexoraTestUSDT(ADMIN);
+        require(testToken.owner() == ADMIN, "Unexpected test token owner");
+    }
+
+    function testSelectedOwnerCanBeTestnetAdminWithDistinctOperationalRoles() public {
+        address ownerAdmin = wallets[0];
+        require(ownerAdmin != address(this) && ownerAdmin != ALLOCATOR, "Test roles collide");
+        NexoraModel2TestnetFactory system = new NexoraModel2TestnetFactory(
+            address(token), ownerAdmin, address(this), ALLOCATOR, wallets
+        );
+        NexoraModel2Vault created = system.vault();
+        require(system.governanceAdmin() == ownerAdmin, "Incorrect administrator");
+        require(created.hasRole(created.DEFAULT_ADMIN_ROLE(), ownerAdmin), "Owner lacks admin role");
+        require(created.hasRole(created.FUNDER_ROLE(), address(this)), "Missing distinct funder");
+        require(created.hasRole(created.ALLOCATOR_ROLE(), ALLOCATOR), "Missing distinct allocator");
+        require(!created.hasRole(created.FUNDER_ROLE(), ownerAdmin), "Owner unexpectedly funder");
+        require(!created.hasRole(created.ALLOCATOR_ROLE(), ownerAdmin), "Owner unexpectedly allocator");
+    }
+
+    function testSingleOwnerTestnetFactoryAssignsAllRolesAndRejectsMainnet() public {
+        address owner = wallets[0];
+        NexoraTestUSDT testToken = new NexoraTestUSDT(owner);
+        NexoraModel2SingleWalletTestnetFactory system = new NexoraModel2SingleWalletTestnetFactory(
+            address(testToken), owner, wallets
+        );
+        NexoraModel2Vault created = system.vault();
+        require(system.testOwner() == owner, "Wrong single-wallet owner");
+        require(created.hasRole(created.DEFAULT_ADMIN_ROLE(), owner), "Missing owner admin role");
+        require(created.hasRole(created.FUNDER_ROLE(), owner), "Missing owner funder role");
+        require(created.hasRole(created.ALLOCATOR_ROLE(), owner), "Missing owner allocator role");
+        require(!created.hasRole(created.DEFAULT_ADMIN_ROLE(), address(system)), "Factory retains admin");
+        require(!system.splitter().hasRole(system.splitter().DEFAULT_ADMIN_ROLE(), address(system)),
+            "Factory retains splitter admin");
+
+        vm.prank(owner); testToken.mintTestTokens(ALICE, 1_000 * U);
+        vm.prank(ALICE); testToken.approve(address(created), 1_000 * U);
+        vm.prank(ALICE); created.deposit(1_000 * U, address(0));
+        vm.prank(owner); testToken.mintTestTokens(owner, 10 * U);
+        vm.prank(owner); testToken.approve(address(created), 10 * U);
+        vm.prank(owner); created.fundRewards(10 * U);
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(owner); created.allocateReward(ALICE, 10 * U, bytes32(uint256(999)));
+        _eq(created.getAccount(ALICE).baseRewards, 10 * U);
+        require(created.isSolvent(), "Single-wallet testnet funds are not backed");
+
+        vm.chainId(56);
+        try new NexoraModel2SingleWalletTestnetFactory(address(testToken), owner, wallets) {
+            revert("Single-wallet factory accepted mainnet");
+        } catch (bytes memory reason) {
+            require(bytes4(reason) == NexoraModel2SingleWalletTestnetFactory.TestnetOnly.selector,
+                "Factory reverted for the wrong reason");
+        }
+    }
+
+    function testSingleWalletFactoryRejectsMockOwnedBySomeoneElse() public {
+        NexoraTestUSDT wrongOwnerToken = new NexoraTestUSDT(BOB);
+        try new NexoraModel2SingleWalletTestnetFactory(address(wrongOwnerToken), wallets[0], wallets) {
+            revert("Factory accepted wrong test token owner");
+        } catch (bytes memory reason) {
+            require(bytes4(reason) == NexoraModel2SingleWalletTestnetFactory.InvalidTestToken.selector,
+                "Factory reverted for the wrong reason");
+        }
     }
 }

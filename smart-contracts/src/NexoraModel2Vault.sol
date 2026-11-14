@@ -20,6 +20,7 @@ import {NexoraRevenueSplitter} from "./NexoraRevenueSplitter.sol";
 
 contract NexoraModel2Vault is AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
+    uint256 public constant TESTNET_CHAIN_ID = 97;
     bytes32 public constant FUNDER_ROLE = keccak256("FUNDER_ROLE");
     bytes32 public constant ALLOCATOR_ROLE = keccak256("ALLOCATOR_ROLE");
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
@@ -72,7 +73,7 @@ contract NexoraModel2Vault is AccessControl, Pausable, ReentrancyGuard {
     mapping(address => uint256) public externalDepositBasis; // excludes Reinvest
     mapping(address => Account) private _accounts;
     mapping(address => address[]) private _children;
-    mapping(address => uint256) public teamVolume; // three-level open gross basis
+    mapping(address => uint256) public teamVolume; // 3-level open gross plan basis, not net principal
     mapping(address => mapping(address => uint256)) public branchVolume;
     mapping(bytes32 => bool) public usedReportIds;
     uint256 public totalPrincipal;
@@ -113,8 +114,10 @@ contract NexoraModel2Vault is AccessControl, Pausable, ReentrancyGuard {
     error WithdrawalLimitExceeded();
     error NoMaturedTranche();
     error IncorrectSplitter();
+    error TestnetOnly(uint256 actualChainId);
 
     constructor(address token_, address admin_, address funder_, address allocator_, address splitter_) {
+        if (block.chainid != TESTNET_CHAIN_ID) revert TestnetOnly(block.chainid);
         if (token_ == address(0) || admin_ == address(0) || funder_ == address(0) || allocator_ == address(0))
             revert ZeroAddress();
         if (token_.code.length == 0 || IERC20Metadata(token_).decimals() != 18) revert InvalidAsset();
@@ -194,7 +197,12 @@ contract NexoraModel2Vault is AccessControl, Pausable, ReentrancyGuard {
         emit PrincipalWithdrawn(msg.sender, amount);
     }
 
-    /** Reinvest funded reward: 20% explicitly allocated, 80% new NET principal locked 90 days. */
+    /**
+     * Move already funded, credited rewards into a NEW 90-day principal
+     * tranche. The disclosed 20% company allocation is transferred to the
+     * splitter and the remaining 80% is credited as net principal.
+     * This does not increase externalDepositBasis or the withdrawal allowance.
+     */
     function reinvestRewards(uint256 amount) external whenNotPaused nonReentrant {
         Account storage a = _accounts[msg.sender];
         if (!a.everDeposited || amount == 0 || amount > a.baseRewards + a.referralRewards)

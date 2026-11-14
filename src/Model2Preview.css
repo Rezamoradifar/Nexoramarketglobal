@@ -30,8 +30,8 @@
 .model2-ledger>div,.model2-side-card dl>div{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .model2-ledger dt,.model2-side-card dt{color:#b6abc8;font-size:11px}
 .model2-ledger dd,.model2-side-card dd{font-weight:750;color:#f3eaff;text-align:right;font-size:12px;margin:0}
-.model2-ledger-total{padding-top:14px;border-top:1px solid #45385c}
-.model2-ledger-total dd{font-size:15px}
+.model2-total{padding-top:14px;border-top:1px solid #45385c}
+.model2-total dd{font-size:15px}
 .model2-disclosure{color:#b4a9c5;font-size:11px;line-height:1.75;margin:20px 0 0;padding:13px;border-radius:10px;
   border:1px solid #664e64;background:#32233769}
 .model2-disclosure strong{color:#f8d8b6}
@@ -58,7 +58,21 @@
 .model2-testnet-data>div:last-child{border-bottom:0}
 .model2-testnet-data span{font-size:11px;color:#b8acc8}
 .model2-testnet-data strong{font-size:12px;color:#e7ddfa;white-space:nowrap}
+.model2-actions{width:100%;border:1px solid #635079;border-radius:14px;background:#111327;padding:18px}
+.model2-actions-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.model2-actions-heading span{font-size:10px;color:#bdefd9;font-weight:800}
+.model2-action-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.model2-action-card{border:1px solid #403754;border-radius:12px;background:#18172b;padding:14px}
+.model2-action-card label{display:block;color:#e8d8fd;font-size:11px;font-weight:800;margin:10px 0 7px}
+.model2-action-card label:first-child{margin-top:0}
+.model2-action-card input{width:100%;min-height:43px;border:1px solid #635186;border-radius:9px;background:#080b1b;color:#fff;padding:9px 11px;font-size:14px}
+.model2-action-card button{margin-top:10px}
+.model2-action-card p{margin-top:10px}
+.model2-action-buttons{display:flex;flex-wrap:wrap;gap:7px}
+.model2-transaction-message{margin-top:15px!important;color:#e8d8fd!important}
+.model2-transaction-link{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:10px}
+.model2-transaction-link a{color:#bdefd9;font-size:12px;overflow-wrap:anywhere}
 @media(max-width:950px){.model2-layout{grid-template-columns:1fr}.model2-side{grid-template-columns:1fr 1fr;grid-template-rows:auto}.model2-main{padding:20px}}
 @media(max-width:680px){.model2-preview{padding:22px 14px}.model2-intro{flex-direction:column;gap:14px}.model2-side{grid-template-columns:1fr}.model2-gross{align-items:flex-start;flex-direction:column}
 .model2-gross strong{font-size:27px}.model2-main,.model2-side-card{padding:17px}
-.model2-testnet button{width:100%}.model2-testnet-data>div{flex-direction:column;align-items:flex-start}}
+.model2-testnet button{width:100%}.model2-testnet-data>div{flex-direction:column;align-items:flex-start}.model2-action-grid{grid-template-columns:1fr}.model2-actions-heading{align-items:flex-start;flex-direction:column}}

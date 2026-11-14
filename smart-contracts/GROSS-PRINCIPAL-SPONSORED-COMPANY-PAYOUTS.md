@@ -1,5 +1,7 @@
 # Nexora — 100% gross credited principal, gross reward basis, independent company payouts
 
+> **Alternative historical proposal:** this 100%-backed model is distinct from the current 80%-net Model 2 testnet prototype. See the current [README](./README.md) before relying on these terms.
+
 **Status: DRAFT / NOT DEPLOYED / NOT AUDITED. No production deposits or financial transfers have been enabled.**
 
 ## Final clarification from platform owner

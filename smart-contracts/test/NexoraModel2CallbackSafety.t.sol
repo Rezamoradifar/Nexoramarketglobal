@@ -9,6 +9,7 @@ import {FeeOnTransferMockNexora, SixDecimalTokenNexora} from "./NexoraAdversaria
 interface VmModel2Callback {
     function warp(uint256) external;
     function prank(address) external;
+    function chainId(uint256) external;
 }
 
 /** Local malicious mock only. No real token, address or chain is attacked. */
@@ -55,6 +56,7 @@ contract NexoraModel2CallbackSafetyTest {
     address[11] private recipients;
 
     function setUp() public {
+        vm.chainId(97);
         vm.warp(T);
         for (uint256 i; i < 11; ++i) recipients[i] = address(uint160(0xB100 + i));
         token = new Model2CallbackMock();

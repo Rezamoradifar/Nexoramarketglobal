@@ -17,6 +17,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 VAULT = ROOT / "src" / "NexoraProfitVault.sol"
 PREVIEW = ROOT / "src" / "NexoraEntryAllocationPreview.sol"
+MODEL2 = ROOT / "src" / "NexoraModel2Vault.sol"
 CONFIG = ROOT / "config" / "beneficiary-wallets.candidate.json"
 
 
@@ -24,15 +25,19 @@ def collect_release_blockers() -> list[str]:
     blockers = []
     vault_source = VAULT.read_text(encoding="utf-8")
     preview_source = PREVIEW.read_text(encoding="utf-8")
-    if "a.principal = afterDeposit;" in vault_source:
+    if MODEL2.is_file() and "function deposit(" in MODEL2.read_text(encoding="utf-8"):
         blockers.append(
-            "MODEL_2_NOT_IN_VAULT: production deposit currently credits 100% "
-            "as principal; gross 1000/net 800 upfront fee flow is only a preview"
+            "MODEL_2_TESTNET_PROTOTYPE_ONLY: the separate gross/net vault has "
+            "no verified deployment, independent audit, or production approval"
+        )
+    elif "a.principal = afterDeposit;" in vault_source:
+        blockers.append(
+            "MODEL_2_NOT_IN_VAULT: the legacy vault credits gross principal; "
+            "the separate executable model is missing"
         )
     if "function preview(" in preview_source and "function deposit(" not in preview_source:
-        blockers.append(
-            "MODEL_2_PREVIEW_ONLY: a math preview is not an escrow/commission contract"
-        )
+        blockers.append("MODEL_2_PRODUCTION_INTEGRATION_UNVERIFIED: the preview and "
+                        "testnet prototype are not a deployed financial product")
     if not CONFIG.is_file():
         blockers.append("BENEFICIARIES_MISSING: cannot find candidate registry")
     else:

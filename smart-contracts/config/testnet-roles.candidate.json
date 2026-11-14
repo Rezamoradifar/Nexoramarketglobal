@@ -2,8 +2,9 @@
   "schemaVersion": 1,
   "status": "TESTNET_CANDIDATE_CONTROL_UNVERIFIED",
   "chainId": 97,
+  "mode": "SINGLE_WALLET_TESTNET_ONLY",
   "administrator": "0x1782bf2A11BdfF5B96c33Fe379457FF14338e1B4",
-  "rewardFunder": null,
-  "rewardAllocator": null,
+  "rewardFunder": "0x1782bf2A11BdfF5B96c33Fe379457FF14338e1B4",
+  "rewardAllocator": "0x1782bf2A11BdfF5B96c33Fe379457FF14338e1B4",
   "deployer": "0x1782bf2A11BdfF5B96c33Fe379457FF14338e1B4"
 }

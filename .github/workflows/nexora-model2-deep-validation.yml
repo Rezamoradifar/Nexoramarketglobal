@@ -36,7 +36,7 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          for name, constructor_bytes in [('NexoraModel2Vault', 160), ('NexoraRevenueSplitter', 448), ('NexoraModel2TestnetFactory', 480), ('NexoraTestUSDT', 32)]:
+          for name, constructor_bytes in [('NexoraModel2Vault', 160), ('NexoraRevenueSplitter', 448), ('NexoraModel2TestnetFactory', 480), ('NexoraModel2SingleWalletTestnetFactory', 416), ('NexoraTestUSDT', 32)]:
               data = json.loads(Path(f'out/{name}.sol/{name}.json').read_text())
               runtime = len(bytes.fromhex(data['deployedBytecode']['object'].removeprefix('0x')))
               initcode = len(bytes.fromhex(data['bytecode']['object'].removeprefix('0x'))) + constructor_bytes

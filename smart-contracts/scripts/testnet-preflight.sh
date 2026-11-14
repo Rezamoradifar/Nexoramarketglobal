@@ -22,6 +22,6 @@ forge build --sizes >/dev/null || fail 'Contract build or size verification fail
 echo 'Checking testnet role candidates...'
 python3 scripts/check-testnet-roles.py --enforce || fail 'Testnet role addresses are incomplete or invalid'
 echo 'NEXORA_TESTNET_READ_ONLY_PREFLIGHT_OK__NO_BROADCAST'
-echo 'Still required: verified wallet control and funded tBNB signers,'
+echo 'Still required: verified wallet control and a funded tBNB signer,'
 echo 'signed recipient role confirmation; real testnet canary'
 echo 'transactions; independently checked source, audit and compliance.'

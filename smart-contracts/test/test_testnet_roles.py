@@ -2,6 +2,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -16,12 +17,21 @@ class TestTestnetRoleConfiguration(unittest.TestCase):
     def setUp(self):
         self.data = json.loads((ROOT / "config/testnet-roles.candidate.json").read_text())
 
-    def test_selected_owner_is_recorded_and_missing_roles_fail_closed(self):
+    def test_selected_owner_is_recorded_for_all_testnet_roles(self):
         beneficiaries = json.loads((ROOT / "config/beneficiary-wallets.candidate.json").read_text())
         self.assertEqual(self.data["administrator"], beneficiaries["constructorWallets"][0])
-        self.assertEqual(self.data["deployer"], self.data["administrator"])
-        self.assertEqual(roles.validate(self.data), ["rewardFunder", "rewardAllocator"])
-        result = subprocess.run([sys.executable, str(ROOT / "scripts/check-testnet-roles.py"), "--enforce"],
+        for field in ("rewardFunder", "rewardAllocator", "deployer"):
+            self.assertEqual(self.data[field], self.data["administrator"])
+        self.assertEqual(roles.validate(self.data), [])
+
+    def test_missing_roles_fail_closed(self):
+        self.data["rewardFunder"] = None
+        self.assertEqual(roles.validate(self.data), ["rewardFunder"])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "roles.json"
+            path.write_text(json.dumps(self.data))
+            result = subprocess.run([sys.executable, str(ROOT / "scripts/check-testnet-roles.py"),
+                                     "--config", str(path), "--enforce"],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
         self.assertIn("NEXORA_TESTNET_ROLES_INCOMPLETE", result.stdout)
@@ -31,11 +41,19 @@ class TestTestnetRoleConfiguration(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "chain 97"):
             roles.validate(self.data)
         self.data["chainId"] = 97
+        self.data["mode"] = "SEPARATE_ROLES_TESTNET_ONLY"
         self.data["rewardFunder"] = self.data["administrator"]
         with self.assertRaisesRegex(ValueError, "must be distinct"):
             roles.validate(self.data)
 
+    def test_single_wallet_mode_rejects_a_different_role(self):
+        self.data["rewardAllocator"] = "0x1111111111111111111111111111111111111111"
+        with patch.object(roles, "checksum", side_effect=lambda address: address):
+            with self.assertRaisesRegex(ValueError, "same address"):
+                roles.validate(self.data)
+
     def test_deployer_may_be_one_of_the_operational_roles(self):
+        self.data["mode"] = "SEPARATE_ROLES_TESTNET_ONLY"
         self.data["rewardFunder"] = "0x1111111111111111111111111111111111111111"
         self.data["rewardAllocator"] = "0x2222222222222222222222222222222222222222"
         self.data["deployer"] = self.data["administrator"]

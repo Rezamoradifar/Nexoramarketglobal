@@ -22,6 +22,9 @@ def checksum(address: str) -> str:
 def validate(data: dict) -> list[str]:
     if data.get("schemaVersion") != 1 or data.get("chainId") != 97:
         raise ValueError("This configuration must target BNB Testnet chain 97")
+    mode = data.get("mode")
+    if mode not in ("SINGLE_WALLET_TESTNET_ONLY", "SEPARATE_ROLES_TESTNET_ONLY"):
+        raise ValueError("Unknown testnet role mode")
     missing = []
     seen_roles = set()
     for field in (*ROLES, "deployer"):
@@ -35,28 +38,37 @@ def validate(data: dict) -> list[str]:
             raise ValueError(f"Zero or non-checksummed {field} address")
         normalized = address.lower()
         if field in ROLES:
-            if normalized in seen_roles:
+            if mode == "SEPARATE_ROLES_TESTNET_ONLY" and normalized in seen_roles:
                 raise ValueError("Administrator, funder and allocator must be distinct")
             seen_roles.add(normalized)
+    if mode == "SINGLE_WALLET_TESTNET_ONLY" and len(seen_roles) > 1:
+        raise ValueError("Single-wallet testnet roles must use the same address")
+    if mode == "SINGLE_WALLET_TESTNET_ONLY" and data.get("administrator") and data.get("deployer"):
+        if data["administrator"].lower() != data["deployer"].lower():
+            raise ValueError("Single-wallet testnet deployer must match the administrator")
     return missing
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--enforce", action="store_true", help="Exit nonzero if any role is missing")
+    parser.add_argument("--config", type=Path, default=CONFIG, help="Public role-candidate JSON file")
     args = parser.parse_args()
     try:
-        data = json.loads(CONFIG.read_text(encoding="utf-8"))
+        data = json.loads(args.config.read_text(encoding="utf-8"))
         missing = validate(data)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"NEXORA_TESTNET_ROLES_INVALID: {exc}", file=sys.stderr)
         return 1
     print(f"Testnet admin candidate: {data.get('administrator') or 'not supplied'}")
+    print(f"Testnet mode: {data.get('mode')}")
     if missing:
         print("NEXORA_TESTNET_ROLES_INCOMPLETE: " + ", ".join(missing))
     else:
         print("NEXORA_TESTNET_ROLE_ADDRESSES_FORMAT_VALID")
     print("Wallet control, tBNB balances, multisig, and deployment are not verified.")
+    if data.get("mode") == "SINGLE_WALLET_TESTNET_ONLY":
+        print("One wallet holds all roles for no-value testnet rehearsal, not mainnet governance.")
     return 2 if missing and args.enforce else 0
 
 

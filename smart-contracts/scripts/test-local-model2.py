@@ -163,6 +163,28 @@ def main() -> None:
         subprocess.run(["node", str(ROOT.parent / "tests/local-model2-wallet-e2e.mjs"),
                         endpoint, vault, token, ui_member], cwd=ROOT.parent, check=True)
         expect(call(vault, "isSolvent()"), 1, "solvency after wallet integration")
+
+        # The optional single-wallet factory is restricted to this no-value
+        # testnet rehearsal. Its owner separately signs each local action.
+        single = deploy(deployer,
+                        "src/NexoraModel2SingleWalletTestnetFactory.sol:NexoraModel2SingleWalletTestnetFactory",
+                        token, admin, *beneficiaries)
+        single_vault = "0x" + f"{call(single, 'vault()'):040x}"
+        expect(call(single, "testOwner()"), int(admin, 16), "single-wallet test owner")
+        single_member = accounts[17]
+        transact(admin, token, data("mintTestTokens(address,uint256)", single_member, 1_000 * UNIT))
+        transact(single_member, token, data("approve(address,uint256)", single_vault, 1_000 * UNIT))
+        transact(single_member, single_vault, data("deposit(uint256,address)", 1_000 * UNIT, 0))
+        transact(admin, token, data("mintTestTokens(address,uint256)", admin, 10 * UNIT))
+        transact(admin, token, data("approve(address,uint256)", single_vault, 10 * UNIT))
+        transact(admin, single_vault, data("fundRewards(uint256)", 10 * UNIT))
+        rpc("evm_increaseTime", [24 * 60 * 60])
+        rpc("evm_mine", [])
+        transact(admin, single_vault, data("allocateReward(address,uint256,bytes32)",
+                                            single_member, 10 * UNIT, 2))
+        expect(call(single_vault, "totalClaimableRewards()"), 10 * UNIT, "single-wallet reward")
+        expect(call(single_vault, "isSolvent()"), 1, "single-wallet vault solvency")
+        print("LOCAL_SINGLE_WALLET_TESTNET_OK: owner funded and allocated mock rewards")
         print("LOCAL_MODEL2_E2E_OK: deposit, 11 shares, funding, reinvest, "
               "90-day claim, withdrawal, shared 24h cap and solvency")
         print("Local Anvil simulation only; no public-network transaction occurred.")
